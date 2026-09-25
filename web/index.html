@@ -52,34 +52,43 @@
                 </div>
             </div>
 
-            <!-- Call Screen -->
+            <!-- Call Screen (Video Mode) -->
             <div id="callScreen" class="screen">
-                <div class="call-card">
-                    <div class="avatar-circle">
-                        <div class="pulse-ring"></div>
-                        <span class="avatar-icon">👤</span>
-                    </div>
+                <div class="video-container">
+                    <!-- Remote Video (Full Screen) -->
+                    <video id="remoteVideo" autoplay playsinline></video>
+                    
+                    <!-- Local Video (PIP Top Right) -->
+                    <video id="localVideo" autoplay playsinline muted></video>
 
-                    <div class="call-info">
-                        <h2 id="peerName">Voice Call</h2>
+                    <!-- Top Overlay Info -->
+                    <div class="video-overlay-top">
                         <span id="callTimer" class="timer">00:00</span>
+                        <div class="status-container">
+                            <span id="statusIndicator" class="status-dot idle" aria-hidden="true"></span>
+                            <span id="status" class="status-text">IDLE</span>
+                        </div>
+                        <div id="qualityIndicator" class="quality-indicator hidden">
+                            Signal: <span id="qualityText">Good</span>
+                        </div>
                     </div>
 
-                    <div class="status-container">
-                        <span id="statusIndicator" class="status-dot idle" aria-hidden="true"></span>
-                        <span id="status" class="status-text">IDLE</span>
-                    </div>
-
-                    <div id="qualityIndicator" class="quality-indicator hidden">
-                        Signal: <span id="qualityText">Good</span>
-                    </div>
-
-                    <div class="controls">
-                        <button id="muteBtn" class="btn control-btn" aria-label="Mute microphone">
-                            <span id="muteIcon" aria-hidden="true">🎙️</span>
+                    <!-- Bottom Controls -->
+                    <div class="video-controls">
+                        <button id="videoBtn" class="btn control-btn" aria-label="Toggle Video">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
                         </button>
+                        
+                        <button id="muteBtn" class="btn control-btn" aria-label="Mute microphone">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                        </button>
+
+                        <button id="switchCameraBtn" class="btn control-btn" aria-label="Switch Camera">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                        </button>
+                        
                         <button id="hangupBtn" class="btn control-btn danger" disabled aria-label="Hang up">
-                            <span aria-hidden="true">📞</span>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"></path></svg>
                         </button>
                     </div>
                 </div>
@@ -87,7 +96,6 @@
         </main>
     </div>
 
-    <audio id="remoteAudio" autoplay playsinline></audio>
     <!-- socket.io: loaded from signaling server, app.js starts only after it's ready -->
     <script>
         (function(){

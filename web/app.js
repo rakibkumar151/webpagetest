@@ -20,13 +20,14 @@ const callIdInput       = document.getElementById('callIdInput');
 const joinBtn           = document.getElementById('joinBtn');
 const hangupBtn         = document.getElementById('hangupBtn');
 const muteBtn           = document.getElementById('muteBtn');
-const muteIcon          = document.getElementById('muteIcon');
+const videoBtn          = document.getElementById('videoBtn');
+const switchCameraBtn   = document.getElementById('switchCameraBtn');
 const statusSpan        = document.getElementById('status');
 const statusIndicator   = document.getElementById('statusIndicator');
 const callTimer         = document.getElementById('callTimer');
 const errorNotification = document.getElementById('errorNotification');
-const remoteAudio       = document.getElementById('remoteAudio');
-const avatarCircle      = document.querySelector('.avatar-circle');
+const remoteVideo       = document.getElementById('remoteVideo');
+const localVideo        = document.getElementById('localVideo');
 const qualityIndicator  = document.getElementById('qualityIndicator');
 const qualityText       = document.getElementById('qualityText');
 
@@ -45,6 +46,8 @@ let pendingCandidates           = [];
 let appState   = 'IDLE';
 let manualHangup = false;
 let isMuted    = false;
+let isVideoMuted = false;
+let currentFacingMode = 'user';
 
 let timerInterval    = null;
 let secondsConnected = 0;
@@ -122,7 +125,6 @@ function changeAppState(newState, uiMsg) {
 
     statusSpan.textContent = uiMsg || newState;
     statusIndicator.className = 'status-dot ' + newState.toLowerCase();
-    avatarCircle.className    = 'avatar-circle ' + newState.toLowerCase();
     document.body.dataset.state = newState;
 
     if (newState === 'CONNECTED') {
@@ -272,8 +274,10 @@ joinBtn.addEventListener('click', async () => {
         if (!localStream) {
             localStream = await navigator.mediaDevices.getUserMedia({
                 audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-                video: false
+                video: { facingMode: currentFacingMode }
             });
+            localVideo.srcObject = localStream;
+            localVideo.classList.add('pip-active');
         }
         switchScreen('call');
         changeAppState('CONNECTING', 'Connecting...');
@@ -283,8 +287,8 @@ joinBtn.addEventListener('click', async () => {
     } catch (e) {
         log('Media error:', e.message);
         const msg = e.name === 'NotAllowedError'
-            ? 'Microphone access denied. Please allow microphone in browser settings.'
-            : 'Could not access microphone.';
+            ? 'Camera/Microphone access denied. Please allow in browser settings.'
+            : 'Could not access Camera/Microphone.';
         showError(msg);
         joinBtn.disabled = false;
     }
@@ -303,9 +307,70 @@ muteBtn.addEventListener('click', () => {
     if (!track) return;
     isMuted = !isMuted;
     track.enabled = !isMuted;
-    muteIcon.textContent = isMuted ? '🔇' : '🎙️';
     muteBtn.classList.toggle('active', isMuted);
-    muteBtn.setAttribute('aria-label', isMuted ? 'Unmute microphone' : 'Mute microphone');
+    
+    // Update SVG icon color/shape or keep simple active state for now
+    if (isMuted) {
+        muteBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>`;
+    } else {
+        muteBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>`;
+    }
+});
+
+// ─── VIDEO TOGGLE ─────────────────────────────────────────────────────────────
+videoBtn.addEventListener('click', () => {
+    if (!localStream) return;
+    const track = localStream.getVideoTracks()[0];
+    if (!track) return;
+    isVideoMuted = !isVideoMuted;
+    track.enabled = !isVideoMuted;
+    videoBtn.classList.toggle('active', isVideoMuted);
+    
+    if (isVideoMuted) {
+        videoBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+    } else {
+        videoBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>`;
+    }
+});
+
+// ─── CAMERA SWITCH ────────────────────────────────────────────────────────────
+switchCameraBtn.addEventListener('click', async () => {
+    if (!localStream) return;
+    switchCameraBtn.disabled = true;
+    
+    currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+    
+    try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: { facingMode: currentFacingMode }
+        });
+        
+        const newVideoTrack = newStream.getVideoTracks()[0];
+        const oldVideoTrack = localStream.getVideoTracks()[0];
+        
+        // Replace in RTCPeerConnection if active
+        if (pc) {
+            const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (sender) {
+                await sender.replaceTrack(newVideoTrack);
+            }
+        }
+        
+        // Update localStream
+        localStream.removeTrack(oldVideoTrack);
+        oldVideoTrack.stop();
+        localStream.addTrack(newVideoTrack);
+        
+        // Restore mute state
+        newVideoTrack.enabled = !isVideoMuted;
+        
+    } catch (e) {
+        log('Switch camera error:', e.message);
+        currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user'; // revert
+    } finally {
+        switchCameraBtn.disabled = false;
+    }
 });
 
 // ─── CLEANUP ──────────────────────────────────────────────────────────────────
@@ -326,8 +391,17 @@ function cleanupCall(isManual = false) {
         localStream.getTracks().forEach(t => t.stop());
         localStream = null;
         isMuted = false;
-        muteIcon.textContent = '🎙️';
+        isVideoMuted = false;
+        currentFacingMode = 'user';
+        
         muteBtn.classList.remove('active');
+        videoBtn.classList.remove('active');
+        
+        muteBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>`;
+        videoBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>`;
+        
+        localVideo.srcObject = null;
+        localVideo.classList.remove('pip-active');
     }
 
     pendingCandidates            = [];
@@ -338,7 +412,7 @@ function cleanupCall(isManual = false) {
 
     joinBtn.disabled   = false;
     hangupBtn.disabled = true;
-    if (remoteAudio) remoteAudio.srcObject = null;
+    if (remoteVideo) remoteVideo.srcObject = null;
 
     setTimeout(() => switchScreen('join'), isManual ? 1500 : 2500);
 }
@@ -363,9 +437,9 @@ function setupWebRTC() {
 
     pc.ontrack = ({ track, streams }) => {
         log('Remote track received kind=' + track.kind);
-        if (track.kind === 'audio') {
-            remoteAudio.srcObject = streams[0];
-            remoteAudio.play().catch(e => log('Autoplay blocked:', e.message));
+        if (remoteVideo.srcObject !== streams[0]) {
+            remoteVideo.srcObject = streams[0];
+            remoteVideo.play().catch(e => log('Autoplay blocked:', e.message));
         }
     };
 
