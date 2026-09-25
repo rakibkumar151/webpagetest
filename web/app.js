@@ -273,10 +273,15 @@ joinBtn.addEventListener('click', async () => {
     try {
         if (!localStream) {
             try {
-                // Try Video + Audio first
+                // Try Video + Audio first with limited resolution to prevent mobile lag
                 localStream = await navigator.mediaDevices.getUserMedia({
                     audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-                    video: { facingMode: currentFacingMode }
+                    video: { 
+                        facingMode: currentFacingMode,
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        frameRate: { ideal: 24 }
+                    }
                 });
                 localVideo.srcObject = localStream;
                 localVideo.classList.add('pip-active');
@@ -362,7 +367,12 @@ switchCameraBtn.addEventListener('click', async () => {
     try {
         const newStream = await navigator.mediaDevices.getUserMedia({
             audio: false,
-            video: { facingMode: currentFacingMode }
+            video: { 
+                facingMode: currentFacingMode,
+                width: { ideal: 640 },
+                height: { ideal: 480 },
+                frameRate: { ideal: 24 }
+            }
         });
         
         const newVideoTrack = newStream.getVideoTracks()[0];
@@ -458,12 +468,16 @@ function setupWebRTC() {
 
     if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 
-    pc.ontrack = ({ track, streams }) => {
-        log('Remote track received kind=' + track.kind);
-        if (remoteVideo.srcObject !== streams[0]) {
-            remoteVideo.srcObject = streams[0];
-            remoteVideo.play().catch(e => log('Autoplay blocked:', e.message));
+    pc.ontrack = (event) => {
+        log('Remote track received kind=' + event.track.kind);
+        const stream = event.streams[0] || new MediaStream([event.track]);
+        
+        if (remoteVideo.srcObject !== stream) {
+            remoteVideo.srcObject = stream;
         }
+        
+        // Ensure playback starts (iOS requires this)
+        remoteVideo.play().catch(e => log('Autoplay blocked:', e.message));
     };
 
     pc.onicecandidate = ({ candidate }) => {
