@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureVoice — Private Voice Calls</title>
+    <meta name="description" content="Secure, peer-to-peer voice calls. No account needed.">
+    <link rel="stylesheet" href="index.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Production: set SIGNALING_URL to your Render backend URL -->
+    <script>
+        // PRODUCTION: Replace the URL below with your Render signaling server URL.
+        // This is the ONLY place you need to change for deployment.
+        // Local dev auto-detects localhost.
+        window.APP_CONFIG = {
+            SIGNALING_URL: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                ? window.location.origin          // local: same origin (server serves frontend too)
+                : 'https://your-signaling-server.onrender.com'  // CHANGE THIS
+        };
+    </script>
+</head>
+<body data-state="IDLE">
+    <div class="app-container">
+        <header class="app-header">
+            <h1>SecureVoice</h1>
+            <span class="header-sub">End-to-end encrypted voice</span>
+        </header>
+
+        <main class="main-content">
+            <!-- Error Notification -->
+            <div id="errorNotification" class="error-notification hidden" role="alert"></div>
+
+            <!-- Join Screen -->
+            <div id="joinScreen" class="screen active">
+                <div class="card">
+                    <div class="card-icon">🔐</div>
+                    <h2>Join a Voice Call</h2>
+                    <p>Enter a shared code to connect securely</p>
+                    <div class="input-group">
+                        <input
+                            type="text"
+                            id="callIdInput"
+                            placeholder="Enter Call Code"
+                            autocomplete="off"
+                            maxlength="64"
+                            aria-label="Call code"
+                        />
+                        <button id="joinBtn" class="btn primary" aria-label="Join call">
+                            Join Call
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Call Screen -->
+            <div id="callScreen" class="screen">
+                <div class="call-card">
+                    <div class="avatar-circle">
+                        <div class="pulse-ring"></div>
+                        <span class="avatar-icon">👤</span>
+                    </div>
+
+                    <div class="call-info">
+                        <h2 id="peerName">Voice Call</h2>
+                        <span id="callTimer" class="timer">00:00</span>
+                    </div>
+
+                    <div class="status-container">
+                        <span id="statusIndicator" class="status-dot idle" aria-hidden="true"></span>
+                        <span id="status" class="status-text">IDLE</span>
+                    </div>
+
+                    <div id="qualityIndicator" class="quality-indicator hidden">
+                        Signal: <span id="qualityText">Good</span>
+                    </div>
+
+                    <div class="controls">
+                        <button id="muteBtn" class="btn control-btn" aria-label="Mute microphone">
+                            <span id="muteIcon" aria-hidden="true">🎙️</span>
+                        </button>
+                        <button id="hangupBtn" class="btn control-btn danger" disabled aria-label="Hang up">
+                            <span aria-hidden="true">📞</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <audio id="remoteAudio" autoplay playsinline></audio>
+    <!-- socket.io: loaded from signaling server, app.js starts only after it's ready -->
+    <script>
+        (function(){
+            var SURL = (window.APP_CONFIG && window.APP_CONFIG.SIGNALING_URL) || window.location.origin;
+            var s = document.createElement('script');
+            s.src = SURL + '/socket.io/socket.io.js';
+            s.onload = function() {
+                var a = document.createElement('script');
+                a.src = 'app.js';
+                document.body.appendChild(a);
+            };
+            s.onerror = function() {
+                // Fallback: CDN
+                var fb = document.createElement('script');
+                fb.src = 'https://cdn.socket.io/4.8.1/socket.io.min.js';
+                fb.onload = function() {
+                    var a = document.createElement('script');
+                    a.src = 'app.js';
+                    document.body.appendChild(a);
+                };
+                document.body.appendChild(fb);
+            };
+            document.body.appendChild(s);
+        })();
+    </script>
+</body>
+</html>

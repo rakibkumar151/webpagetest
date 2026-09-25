@@ -1,0 +1,19 @@
+{
+  "name": "webrtc-voice-call",
+  "version": "1.0.0",
+  "description": "",
+  "main": "test_webrtc.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express-rate-limit": "^8.7.0",
+    "node-turn": "^0.0.6",
+    "playwright": "^1.63.0"
+  }
+}
