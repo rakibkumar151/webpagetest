@@ -132,6 +132,8 @@ input[type="text"]:focus { border-color: var(--primary); }
     height: 100%;
     object-fit: cover;
     z-index: 1;
+    transform: translateZ(0); /* Force GPU Acceleration */
+    will-change: transform;
 }
 
 #localVideo {
@@ -147,6 +149,8 @@ input[type="text"]:focus { border-color: var(--primary); }
     border: 2px solid rgba(255,255,255,0.2);
     transition: transform 0.3s;
     background: #222;
+    transform: translateZ(0);
+    will-change: transform;
 }
 
 #localVideo.pip-active:active {
@@ -171,22 +175,29 @@ input[type="text"]:focus { border-color: var(--primary); }
 }
 
 .video-controls {
-    position: absolute;
-    bottom: 30px;
+    position: fixed;
+    bottom: max(30px, env(safe-area-inset-bottom));
     left: 50%;
     transform: translateX(-50%);
-    z-index: 10;
+    z-index: 999;
     display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
     gap: 20px;
     background: rgba(0,0,0,0.6);
     padding: 15px 25px;
     border-radius: 40px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    width: max-content;
+    max-width: 95vw;
 }
 
 .control-btn {
     width: 54px;
     height: 54px;
+    min-width: 54px;
+    min-height: 54px;
     border-radius: 50%;
     border: none;
     background: rgba(255,255,255,0.25);
@@ -196,11 +207,16 @@ input[type="text"]:focus { border-color: var(--primary); }
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
+    padding: 0;
+    margin: 0;
+    outline: none;
 }
 
 .control-btn svg {
-    width: 24px;
-    height: 24px;
+    width: 24px !important;
+    height: 24px !important;
+    display: block;
+    margin: 0;
 }
 
 .control-btn:hover {
@@ -243,21 +259,23 @@ body:has(#callScreen.active) {
 
 @media (max-width: 480px) {
     #localVideo {
-        width: 100px;
-        height: 140px;
+        width: 90px;
+        height: 130px;
         top: 15px;
         right: 15px;
     }
     
     .video-controls {
-        bottom: 20px;
-        gap: 15px;
-        padding: 12px 20px;
+        bottom: max(20px, env(safe-area-inset-bottom));
+        gap: 12px;
+        padding: 10px 15px;
     }
     
     .control-btn {
-        width: 48px;
-        height: 48px;
+        width: 46px;
+        height: 46px;
+        min-width: 46px;
+        min-height: 46px;
     }
 }
 
