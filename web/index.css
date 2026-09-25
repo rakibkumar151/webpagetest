@@ -159,19 +159,29 @@ input[type="text"]:focus { border-color: var(--primary); }
 
 .video-overlay-top {
     position: absolute;
-    top: 20px;
+    top: max(20px, env(safe-area-inset-top));
     left: 20px;
     z-index: 10;
     display: flex;
     flex-direction: column;
     gap: 8px;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    align-items: flex-start;
+}
+
+.brand-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: white;
+    letter-spacing: 0.5px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+    margin-bottom: 4px;
 }
 
 .video-overlay-top .timer {
-    font-size: 1.2rem;
-    font-weight: 600;
+    font-size: 1.5rem;
+    font-weight: 700;
     color: white;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.9);
 }
 
 .video-controls {
@@ -284,19 +294,21 @@ body:has(#callScreen.active) {
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 1rem;
-    background-color: rgba(15, 23, 42, 0.5);
+    background-color: rgba(0, 0, 0, 0.65); /* Darker for better visibility */
     border-radius: 2rem;
     font-size: 0.85rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    margin-top: 4px;
 }
-.status-dot { width: 8px; height: 8px; border-radius: 50%; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .status-dot.idle { background-color: var(--text-secondary); }
 .status-dot.connecting { background-color: var(--primary); }
 .status-dot.connected { background-color: var(--success); }
 .status-dot.reconnecting, .status-dot.degraded, .status-dot.recovering { background-color: var(--warning); }
 .status-dot.failed, .status-dot.ended { background-color: var(--danger); }
 
-.status-text { color: var(--text-secondary); }
-.quality-indicator { font-size: 0.8rem; color: var(--text-secondary); }
+.status-text { color: white; font-weight: 500; }
+.quality-indicator { font-size: 0.8rem; color: white; text-shadow: 0 1px 3px rgba(0,0,0,0.8); background: rgba(0,0,0,0.5); padding: 2px 8px; border-radius: 12px;}
 
 .error-notification {
     background-color: var(--danger);
