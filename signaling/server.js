@@ -198,6 +198,21 @@ app.get('/api/db-test', async (_req, res) => {
     }
 });
 
+// ─── DB SCHEMA CHECK (debug endpoint) ──────────────────────────────────────
+app.get('/api/db-schema', async (_req, res) => {
+    if (!db) return res.json({ ok: false, error: 'No DB' });
+    try {
+        const pragma = await db.execute(`PRAGMA table_info(users)`);
+        const cols = pragma.rows.map(r => ({ name: r.name, type: r.type, default: r.dflt_value }));
+        const wanted = ['bio', 'tagline', 'location', 'cover_photo', 'is_verified', 'profile_photo'];
+        const existing = cols.map(c => c.name);
+        const missing = wanted.filter(c => !existing.includes(c));
+        res.json({ ok: true, columns: cols, missing });
+    } catch(e) {
+        res.json({ ok: false, error: e.message });
+    }
+});
+
 // ─── CALLS: INITIATE ─────────────────────────────────────────────────────────
 // Authenticated endpoint — generates a secure random callId server-side.
 // callId is NEVER derived from UIDs so it can't be guessed or replayed.
