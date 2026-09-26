@@ -43,6 +43,7 @@ let makingOffer                 = false;
 let ignoreOffer                 = false;
 let isSettingRemoteAnswerPending = false;
 let pendingCandidates           = [];
+let suppressNegotiation         = false;
 
 let appState   = 'IDLE';
 let manualHangup = false;
@@ -760,6 +761,10 @@ function setupWebRTC() {
     };
 
     pc.onnegotiationneeded = async () => {
+        if (suppressNegotiation) {
+            log('Negotiation suppressed (waiting for peer offer)');
+            return;
+        }
         try {
             makingOffer = true;
             await pc.setLocalDescription();
@@ -995,8 +1000,10 @@ window.addEventListener('load', async () => {
                         log('[RECOVERY] Session resumed on reload');
                         polite = true; // Reloading peer is always polite
                         if (!pc) {
+                            suppressNegotiation = true;
                             socket.emit('peer_action', { callId: currentCallId, action: 'rebuild_webrtc' });
                             setupWebRTC();
+                            setTimeout(() => { suppressNegotiation = false; }, 3000);
                         }
                     } else {
                         changeAppState('FAILED', 'Session expired. Please rejoin.');
