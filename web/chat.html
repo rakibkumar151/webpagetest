@@ -125,7 +125,7 @@
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 6px;
             
             /* Hide scrollbar */
             scrollbar-width: none; /* Firefox */
@@ -148,8 +148,9 @@
             border-radius: 20px;
             font-size: 14.5px;
             line-height: 1.4;
-            word-break: break-word;
-            overflow-wrap: break-word;
+            word-wrap: break-word;
+            overflow-wrap: anywhere;
+            white-space: pre-wrap;
             position: relative;
         }
         .msg-row.sent .msg-bubble {
@@ -222,7 +223,14 @@
             max-height: 120px;
             overflow-y: auto;
             line-height: 20px;
-            word-break: break-word;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            /* Hide scrollbar */
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .chat-input::-webkit-scrollbar {
+            display: none;
         }
         .chat-input:focus { border-color: var(--accent1); }
         .send-btn {
