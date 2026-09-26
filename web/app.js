@@ -1,3 +1,21 @@
+// ─── INSTANT RELOAD GUARD ────────────────────────────────────────────────────
+// Run synchronously before anything else — zero flash of join screen
+;(function() {
+    try {
+        const saved = sessionStorage.getItem('activeCall');
+        if (saved) {
+            const d = JSON.parse(saved);
+            if (d && d.callId) {
+                // Hide join screen immediately, show call screen
+                const js = document.getElementById('joinScreen');
+                const cs = document.getElementById('callScreen');
+                if (js) { js.classList.remove('active'); js.style.display = 'none'; }
+                if (cs) { cs.classList.add('active'); }
+            }
+        }
+    } catch(e) { /* ignore */ }
+})();
+
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 // SIGNALING_URL is set in index.html from window.APP_CONFIG
 // Falls back to same origin (works when server also serves the frontend)
@@ -76,9 +94,11 @@ function showError(msg, duration = 6000) {
 function switchScreen(screen) {
     if (screen === 'call') {
         joinScreen.classList.remove('active');
+        joinScreen.style.display = '';
         callScreen.classList.add('active');
     } else {
         callScreen.classList.remove('active');
+        joinScreen.style.display = '';   // reset any inline hide
         joinScreen.classList.add('active');
     }
 }
