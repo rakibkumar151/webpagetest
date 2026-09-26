@@ -585,6 +585,10 @@
         <div class="loading-chat" id="loadingIndicator">Loading messages...</div>
     </div>
     
+    <button id="scrollToBottomBtn" class="scroll-to-bottom-btn" onclick="scrollToBottom(true)" title="Scroll to bottom">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+    </button>
+    
     <div id="replyPreviewContainer" class="reply-input-preview">
         <div style="font-weight:600; margin-bottom:4px; color:var(--text)" id="replyPreviewName">Name</div>
         <div id="replyPreviewText">Text</div>
@@ -671,8 +675,27 @@
     
     let socket;
     
-    function scrollToBottom() {
-        msgsArea.scrollTop = msgsArea.scrollHeight;
+    const scrollBtn = document.getElementById('scrollToBottomBtn');
+    
+    if (msgsArea) {
+        msgsArea.addEventListener('scroll', () => {
+            if (!scrollBtn) return;
+            const distanceToBottom = msgsArea.scrollHeight - msgsArea.scrollTop - msgsArea.clientHeight;
+            if (distanceToBottom > 150) {
+                scrollBtn.classList.add('visible');
+            } else {
+                scrollBtn.classList.remove('visible');
+            }
+        });
+    }
+
+    function scrollToBottom(smooth = false) {
+        if (!msgsArea) return;
+        if(smooth === true) {
+            msgsArea.scrollTo({ top: msgsArea.scrollHeight, behavior: 'smooth' });
+        } else {
+            msgsArea.scrollTop = msgsArea.scrollHeight;
+        }
     }
     
     function formatTime(isoStr) {
@@ -821,7 +844,14 @@
             </div>
         `;
         msgsArea.appendChild(row);
-        scrollToBottom();
+        
+        // Auto-scroll logic: scroll down if I sent it, or if I'm already near the bottom
+        const distanceToBottom = msgsArea.scrollHeight - msgsArea.scrollTop - msgsArea.clientHeight;
+        if (isMe || distanceToBottom < 200) {
+            scrollToBottom();
+        } else {
+            scrollBtn.classList.add('visible'); // Show button for new message
+        }
         
         let pressTimer;
         let touchStartX = 0;
