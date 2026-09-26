@@ -696,29 +696,31 @@
                 isCaller: true
             }));
             sessionStorage.setItem('callPartner', JSON.stringify(partner));
+            // Save caller info so home.html can also signal
+            sessionStorage.setItem('callerInfo', JSON.stringify({
+                to_uid: partner.uid,
+                callId: data.callId,
+                isVideo: isVideo,
+                caller: { first_name: me.first_name, last_name: me.last_name, uid: me.uid }
+            }));
 
-            // Signal the callee in realtime
+            // Signal the callee — wait for emit ack before navigating
+            const doNavigate = () => {
+                window.location.href = 'index.html';
+            };
+
             if (socket && socket.connected) {
                 socket.emit('incoming_call', {
                     to_uid: partner.uid,
                     caller: { first_name: me.first_name, last_name: me.last_name, uid: me.uid },
                     callId: data.callId,
                     isVideo: isVideo
-                });
+                }, () => doNavigate()); // use ack callback to navigate only after server confirms
+                // Fallback timeout in case ack never fires
+                setTimeout(doNavigate, 600);
+            } else {
+                doNavigate();
             }
-
-            // 20s auto-cancel if not answered
-            window._callAutoCancel = setTimeout(() => {
-                if (socket && socket.connected) {
-                    socket.emit('call_no_answer', { to_uid: partner.uid });
-                }
-                // Save missed log — caller side
-                saveCallLog('missed', 0);
-                sessionStorage.removeItem('activeCall');
-                window.location.href = 'chat.html?' + new URLSearchParams({ partner: JSON.stringify(partner) });
-            }, 20000);
-
-            window.location.href = 'index.html';
         } catch(e) {
             alert('Connection error. Check your internet.');
         }

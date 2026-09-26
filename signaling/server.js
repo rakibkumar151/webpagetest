@@ -439,9 +439,10 @@ io.on('connection', (socket) => {
     });
 
     // ─── INCOMING CALL SIGNAL ──────────────────────────────────────────────────
-    socket.on('incoming_call', (data) => {
+    socket.on('incoming_call', (data, ack) => {
         // data: { to_uid, caller, callId, isVideo }
-        if (!socket.data.uid) return;
+        if (!socket.data.uid) { if (typeof ack === 'function') ack({ ok: false }); return; }
+        let delivered = false;
         if (globalUserSockets.has(data.to_uid)) {
             const socketIds = globalUserSockets.get(data.to_uid);
             for (let sId of socketIds) {
@@ -451,8 +452,10 @@ io.on('connection', (socket) => {
                     callId: data.callId,
                     isVideo: data.isVideo
                 });
+                delivered = true;
             }
         }
+        if (typeof ack === 'function') ack({ ok: delivered });
     });
 
     socket.on('call_reject', (data) => {
