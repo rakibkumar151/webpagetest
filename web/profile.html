@@ -69,9 +69,18 @@
             height: 220px;
             position: relative;
             background: linear-gradient(135deg, #1e1b4b, #311b92, #4a148c);
-            background-size: cover;
-            background-position: center;
             overflow: hidden;
+        }
+
+        .cover-img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center center;
+            display: none;
         }
 
         .cover-overlay {
@@ -613,6 +622,7 @@
 
         <!-- Cover Banner -->
         <div class="cover-container" id="coverBanner">
+            <img class="cover-img" id="coverImgEl" src="" alt="Cover photo">
             <div class="cover-overlay"></div>
             <div class="cover-actions">
                 <button class="icon-btn" onclick="window.location.href='home.html'" title="Back to Home">
@@ -980,12 +990,17 @@
         function renderProfile(user) {
             currentProfileData = user;
 
-            // 1. Cover Photo
+            // 1. Cover Photo — use <img> for proper object-fit (no zoom)
+            const coverImg = document.getElementById('coverImgEl');
             const coverBanner = document.getElementById('coverBanner');
             if (user.cover_photo) {
-                coverBanner.style.backgroundImage = `url(${user.cover_photo})`;
+                coverImg.src = user.cover_photo;
+                coverImg.style.display = 'block';
+                coverBanner.style.backgroundImage = 'none';
             } else {
-                coverBanner.style.backgroundImage = `linear-gradient(135deg, #1e1b4b, #311b92, #4a148c)`;
+                coverImg.style.display = 'none';
+                coverImg.src = '';
+                coverBanner.style.backgroundImage = 'linear-gradient(135deg, #1e1b4b, #311b92, #4a148c)';
             }
 
             // 2. Avatar & Online status
