@@ -78,7 +78,8 @@ if (TURSO_URL && TURSO_TOKEN) {
                     last_name    TEXT NOT NULL,
                     email        TEXT UNIQUE NOT NULL,
                     password_hash TEXT NOT NULL,
-                    created_at   TEXT DEFAULT (datetime('now'))
+                    created_at   TEXT DEFAULT (datetime('now')),
+                    last_active  TEXT DEFAULT NULL
                 )
             `);
             await db.execute(`
@@ -87,12 +88,14 @@ if (TURSO_URL && TURSO_TOKEN) {
                     from_uid       TEXT NOT NULL,
                     to_uid         TEXT NOT NULL,
                     encrypted_text TEXT NOT NULL,
-                    created_at     TEXT DEFAULT (datetime('now'))
+                    created_at     TEXT DEFAULT (datetime('now')),
+                    read_at        TEXT DEFAULT NULL
                 )
             `);
-            // Add columns safely
-            await db.execute(`ALTER TABLE users ADD COLUMN last_active TEXT DEFAULT NULL`).catch(()=> {});
-            await db.execute(`ALTER TABLE messages ADD COLUMN read_at TEXT DEFAULT NULL`).catch(()=> {});
+            // Add columns safely to existing tables
+            try { await db.execute(`ALTER TABLE users ADD COLUMN last_active TEXT DEFAULT NULL`); } catch(e) {}
+            try { await db.execute(`ALTER TABLE messages ADD COLUMN read_at TEXT DEFAULT NULL`); } catch(e) {}
+            
             dbReady = true;
             console.log('[DB] Turso connected and tables ready');
         } catch (e) {
@@ -253,20 +256,24 @@ app.get('/api/users', authMiddleware, async (req, res) => {
         let result;
         if (q) {
             result = await db.execute({
-                sql: `SELECT uid, username, first_name, last_name, last_active FROM users
+                sql: `SELECT * FROM users
                       WHERE (username LIKE ? OR first_name LIKE ? OR last_name LIKE ? OR uid LIKE ?)
                       AND uid != ? LIMIT 40`,
                 args: [`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, req.user.uid]
             });
         } else {
             result = await db.execute({
-                sql: `SELECT uid, username, first_name, last_name, last_active FROM users
+                sql: `SELECT * FROM users
                       WHERE uid != ? ORDER BY created_at DESC LIMIT 40`,
                 args: [req.user.uid]
             });
         }
         const users = result.rows.map(u => ({
-            ...u,
+            uid: u.uid,
+            username: u.username,
+            first_name: u.first_name,
+            last_name: u.last_name,
+            last_active: u.last_active || null,
             is_online: globalUserSockets.has(u.uid)
         }));
         res.json(users);
@@ -315,7 +322,7 @@ app.get('/api/messages/:uid', authMiddleware, async (req, res) => {
     const myUid = req.user.uid;
     try {
         const result = await db.execute({
-            sql: `SELECT id, from_uid, to_uid, encrypted_text, created_at, read_at FROM messages 
+            sql: `SELECT * FROM messages 
                   WHERE (from_uid = ? AND to_uid = ?) OR (from_uid = ? AND to_uid = ?)
                   ORDER BY created_at ASC LIMIT 100`,
             args: [myUid, otherUid, otherUid, myUid]
@@ -328,7 +335,7 @@ app.get('/api/messages/:uid', authMiddleware, async (req, res) => {
             to_uid: row.to_uid,
             text: decryptMessage(row.encrypted_text),
             created_at: row.created_at,
-            read_at: row.read_at
+            read_at: row.read_at || null
         }));
         
         res.json(messages);
