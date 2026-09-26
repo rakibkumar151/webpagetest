@@ -447,7 +447,11 @@ app.post('/api/users/profile', authMiddleware, async (req, res) => {
             updatedUser.is_online = true;
 
             // Broadcast real-time profile update to ALL connected users
-            io.emit('profile_updated', updatedUser);
+            // Omit massive base64 images to prevent socket lag/crashes!
+            const lightweightUpdate = { ...updatedUser };
+            delete lightweightUpdate.profile_photo;
+            delete lightweightUpdate.cover_photo;
+            io.emit('profile_updated', lightweightUpdate);
             res.json({ success: true, user: updatedUser });
         } else {
             res.json({ success: true });
