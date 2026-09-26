@@ -196,6 +196,8 @@ function changeAppState(newState, uiMsg) {
     document.body.dataset.state = newState;
 
     if (newState === 'CONNECTED') {
+        // Cancel caller watchdog — call was answered
+        if (window._callerWatchdog) { clearTimeout(window._callerWatchdog); window._callerWatchdog = null; }
         hideCallingOverlay();
         startTimer();
         startStatsMonitor();
@@ -812,8 +814,6 @@ function cleanupCall(isManual = false) {
     }, delay);
 }
 
-let manualHangup_logSaved = false; // reset each new call
-
 // ─── REBUILD ──────────────────────────────────────────────────────────────────
 function rebuildConnection() {
     log('Rebuilding RTCPeerConnection');
@@ -916,14 +916,22 @@ socket.on('connect', () => {
 // ─── CALL REJECTED BY CALLEE ──────────────────────────────────────────────────
 socket.on('call_rejected', () => {
     log('[CALL] Call was rejected by callee');
-    // Save a pending call log for chat.html to render when we go back
     sessionStorage.setItem('pendingCallLog', JSON.stringify({ status: 'rejected', duration: 0 }));
     sessionStorage.removeItem('activeCall');
-    manualHangup = true; // Don't save duplicate log in cleanupCall
+    manualHangup = true;
+    manualHangup_logSaved = true; // already saving as rejected
     if (pc) { pc.close(); pc = null; }
     if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
     stopTimer();
-    window.location.replace('chat.html');
+    // Go back to chat with this partner
+    try {
+        const partner = JSON.parse(sessionStorage.getItem('callPartner') || 'null');
+        if (partner && partner.uid) {
+            window.location.replace('chat.html?' + new URLSearchParams({ partner: JSON.stringify(partner) }));
+            return;
+        }
+    } catch(e) {}
+    window.location.replace('home.html');
 });
 
 // ─── CALL MISSED (no answer) ───────────────────────────────────────────────────
@@ -932,10 +940,18 @@ socket.on('call_missed', () => {
     sessionStorage.setItem('pendingCallLog', JSON.stringify({ status: 'missed', duration: 0 }));
     sessionStorage.removeItem('activeCall');
     manualHangup = true;
+    manualHangup_logSaved = true;
     if (pc) { pc.close(); pc = null; }
     if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
     stopTimer();
-    window.location.replace('chat.html');
+    try {
+        const partner = JSON.parse(sessionStorage.getItem('callPartner') || 'null');
+        if (partner && partner.uid) {
+            window.location.replace('chat.html?' + new URLSearchParams({ partner: JSON.stringify(partner) }));
+            return;
+        }
+    } catch(e) {}
+    window.location.replace('home.html');
 });
 
 
@@ -1174,13 +1190,54 @@ window.addEventListener('load', async () => {
                     polite = true;
                     setupWebRTC();
                 } else {
-                    log('[RELOAD] resume_failed — session gone, going home');
+                    log('[RELOAD] resume_failed — session gone, going to chat');
                     changeAppState('FAILED', 'Session expired.');
                     sessionStorage.removeItem('activeCall');
-                    setTimeout(() => window.location.replace('home.html'), 1500);
+                    setTimeout(() => {
+                        try {
+                            const partner = JSON.parse(sessionStorage.getItem('callPartner') || 'null');
+                            if (partner && partner.uid) {
+                                window.location.replace('chat.html?' + new URLSearchParams({ partner: JSON.stringify(partner) }));
+                                return;
+                            }
+                        } catch(e) {}
+                        window.location.replace('home.html');
+                    }, 1500);
                 }
             });
         };
+
+        // ── 20-second caller watchdog: if callee never answers, cleanup and go back ──
+        try {
+            const callData = JSON.parse(sessionStorage.getItem('activeCall') || '{}');
+            if (callData.isCaller === true) {
+                window._callerWatchdog = setTimeout(() => {
+                    if (['CONNECTED', 'ENDED', 'FAILED'].includes(appState)) return; // already connected or done
+                    log('[WATCHDOG] No answer in 20s — giving up');
+                    // Notify callee
+                    if (socket.connected) {
+                        socket.emit('call_no_answer', {
+                            to_uid: JSON.parse(sessionStorage.getItem('callPartner') || '{}').uid
+                        });
+                    }
+                    // Save missed log
+                    manualHangup_logSaved = true;
+                    sessionStorage.setItem('pendingCallLog', JSON.stringify({ status: 'missed', duration: 0 }));
+                    sessionStorage.removeItem('activeCall');
+                    if (pc) { pc.close(); pc = null; }
+                    if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+                    stopTimer();
+                    try {
+                        const partner = JSON.parse(sessionStorage.getItem('callPartner') || 'null');
+                        if (partner && partner.uid) {
+                            window.location.replace('chat.html?' + new URLSearchParams({ partner: JSON.stringify(partner) }));
+                            return;
+                        }
+                    } catch(e2) {}
+                    window.location.replace('home.html');
+                }, 20000);
+            }
+        } catch(e) {}
 
         if (socket.connected) doResume();
         else socket.once('connect', doResume);
@@ -1188,9 +1245,13 @@ window.addEventListener('load', async () => {
     } catch (e) {
         log('Auto-restore failed:', e.message);
         sessionStorage.removeItem('activeCall');
+        try {
+            const partner = JSON.parse(sessionStorage.getItem('callPartner') || 'null');
+            if (partner && partner.uid) {
+                window.location.replace('chat.html?' + new URLSearchParams({ partner: JSON.stringify(partner) }));
+                return;
+            }
+        } catch(e2) {}
         window.location.replace('home.html');
     }
 });
-
-
-
