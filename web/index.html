@@ -9,14 +9,32 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <!-- Production: set SIGNALING_URL to your Render backend URL -->
     <script>
-        // PRODUCTION: Replace the URL below with your Render signaling server URL.
-        // This is the ONLY place you need to change for deployment.
-        // Local dev auto-detects localhost.
         window.APP_CONFIG = {
             SIGNALING_URL: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-                ? window.location.origin          // local: same origin (server serves frontend too)
-                : 'https://webpagetest-8jyd.onrender.com'  // Backend signaling URL
+                ? window.location.origin
+                : 'https://webpagetest-8jyd.onrender.com'
         };
+        // Auth guard — redirect to auth if not logged in
+        try {
+            if (!localStorage.getItem('chet_token') && !sessionStorage.getItem('activeCall')) {
+                window.location.replace('auth.html');
+            }
+        } catch(e) {}
+        // Auto-fill callId from URL param ?callId=...
+        window.addEventListener('DOMContentLoaded', function() {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const callId = params.get('callId');
+                if (callId) {
+                    const inp = document.getElementById('callIdInput');
+                    if (inp) inp.value = callId;
+                    // Auto-click Join if arriving from home page
+                    if (!sessionStorage.getItem('activeCall')) {
+                        setTimeout(function() { document.getElementById('joinBtn').click(); }, 300);
+                    }
+                }
+            } catch(e) {}
+        });
     </script>
 </head>
 <body data-state="IDLE">
