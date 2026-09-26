@@ -1181,6 +1181,11 @@
         function compressImage(file, maxPx, quality, callback) {
             const reader = new FileReader();
             reader.onload = function(evt) {
+                // Skip compression for GIFs and WEBPs (stickers) to keep them animated
+                if (file.type === 'image/gif' || file.type === 'image/webp') {
+                    callback(evt.target.result);
+                    return;
+                }
                 const img = new Image();
                 img.onload = function() {
                     const canvas = document.createElement('canvas');
