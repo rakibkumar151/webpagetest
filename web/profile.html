@@ -20,6 +20,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Cropper.js -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+
     <style>
         :root {
             --bg: #090c13;
@@ -612,6 +617,32 @@
         }
         @keyframes spin { 100% { transform: rotate(360deg); } }
 
+        /* Cropper Modal */
+        .crop-modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(5px);
+            z-index: 10000;
+            display: none;
+            flex-direction: column;
+            align-items: center; justify-content: center;
+        }
+        .crop-modal-overlay.active { display: flex; }
+        .crop-container {
+            width: 90%; max-width: 600px;
+            background: var(--surface-card);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex; flex-direction: column; gap: 16px;
+        }
+        .img-crop-wrap {
+            width: 100%; height: 60vh;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .crop-actions { display: flex; justify-content: flex-end; gap: 12px; }
+
         /* Responsive Mobile Adjustments matching prompt images */
         @media (max-width: 640px) {
             .cover-container {
@@ -646,6 +677,20 @@
     <div class="upload-overlay" id="uploadOverlay">
         <div class="upload-spinner"></div>
         <h3 id="uploadStatusText">Uploading... Please wait</h3>
+    </div>
+
+    <!-- Cropper Modal -->
+    <div class="crop-modal-overlay" id="cropModal">
+        <div class="crop-container">
+            <h3 style="color:#fff; font-family: 'Plus Jakarta Sans', sans-serif;">Crop Image</h3>
+            <div class="img-crop-wrap">
+                <img id="cropperImage" src="" style="display:block;max-width:100%;">
+            </div>
+            <div class="crop-actions">
+                <button class="btn-cancel" onclick="closeCropper()">Cancel</button>
+                <button class="btn-save" onclick="saveCroppedImage()">Crop & Save</button>
+            </div>
+        </div>
     </div>
 
     <div class="profile-container">
@@ -1254,12 +1299,90 @@
             }
         }
 
+        let cropperInstance = null;
+        let cropTarget = null; // 'avatar' or 'cover'
+        let currentFileMime = '';
+
+        function openCropper(imageUrl, type) {
+            cropTarget = type;
+            const img = document.getElementById('cropperImage');
+            img.src = imageUrl;
+            document.getElementById('cropModal').classList.add('active');
+            
+            if (cropperInstance) {
+                cropperInstance.destroy();
+            }
+            
+            cropperInstance = new Cropper(img, {
+                aspectRatio: type === 'avatar' ? 1 : 1400 / 220,
+                viewMode: 1,
+                background: false,
+                autoCropArea: 1,
+            });
+        }
+
+        function closeCropper() {
+            document.getElementById('cropModal').classList.remove('active');
+            if (cropperInstance) {
+                cropperInstance.destroy();
+                cropperInstance = null;
+            }
+            document.getElementById('avatarInput').value = '';
+            document.getElementById('coverInput').value = '';
+        }
+
+        async function uploadProfileImage(type, base64) {
+            try {
+                const payload = {};
+                payload[type === 'avatar' ? 'profile_photo' : 'cover_photo'] = base64;
+                
+                const res = await fetch(`${API}/api/users/profile`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`${type === 'avatar' ? 'Avatar' : 'Cover'} updated successfully! ✅`);
+                    if (data.user) {
+                        myUser = { ...myUser, ...data.user };
+                        localStorage.setItem('chet_user', JSON.stringify(myUser));
+                        renderProfile(myUser);
+                    } else {
+                        loadProfileData();
+                    }
+                } else {
+                    showToast(data.error || 'Upload failed');
+                }
+            } catch(err) {
+                showToast('Upload error — check connection');
+            } finally {
+                setUploadState(false);
+                document.getElementById('avatarInput').value = '';
+                document.getElementById('coverInput').value = '';
+            }
+        }
+
+        async function saveCroppedImage() {
+            if (!cropperInstance) return;
+            const type = cropTarget;
+            const canvas = cropperInstance.getCroppedCanvas({
+                width: type === 'avatar' ? 400 : 1400,
+                height: type === 'avatar' ? 400 : 220
+            });
+            const format = currentFileMime === 'image/png' ? 'image/png' : 'image/jpeg';
+            const base64 = canvas.toDataURL(format, 0.85);
+            closeCropper();
+            
+            setUploadState(true, `Uploading ${type === 'avatar' ? 'Avatar' : 'Cover'}...`);
+            uploadProfileImage(type, base64);
+        }
+
         function handleAvatarUpload(e) {
             if (isUploading) return;
             const file = e.target.files[0];
             if (!file) return;
 
-            // Client-side size check: 5MB
             const mb = (file.size / 1024 / 1024).toFixed(2);
             if (file.size > 5 * 1024 * 1024) {
                 showToast(`Image too large (${mb} MB). Max 5 MB.`);
@@ -1267,34 +1390,20 @@
                 return;
             }
 
-            setUploadState(true, 'Uploading Avatar (GIF/Image)...');
-            compressImage(file, 400, 0.85, async (base64) => {
-                try {
-                    const res = await fetch(`${API}/api/users/profile`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                        body: JSON.stringify({ profile_photo: base64 })
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                        showToast('Avatar updated successfully! ✅');
-                        if (data.user) {
-                            myUser = { ...myUser, ...data.user };
-                            localStorage.setItem('chet_user', JSON.stringify(myUser));
-                            renderProfile(myUser);
-                        } else {
-                            loadProfileData();
-                        }
-                    } else {
-                        showToast(data.error || 'Upload failed');
-                    }
-                } catch(err) {
-                    showToast('Upload error — check connection');
-                } finally {
-                    e.target.value = '';
-                    setUploadState(false);
-                }
-            });
+            if (file.type === 'image/gif' || file.type === 'image/webp') {
+                setUploadState(true, 'Uploading Avatar (GIF/Sticker)...');
+                compressImage(file, 400, 0.85, async (base64) => {
+                    uploadProfileImage('avatar', base64);
+                });
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                currentFileMime = file.type;
+                openCropper(evt.target.result, 'avatar');
+            };
+            reader.readAsDataURL(file);
         }
 
         function handleCoverUpload(e) {
@@ -1302,7 +1411,6 @@
             const file = e.target.files[0];
             if (!file) return;
 
-            // Client-side size check: 7MB
             const mb = (file.size / 1024 / 1024).toFixed(2);
             if (file.size > 7 * 1024 * 1024) {
                 showToast(`Cover too large (${mb} MB). Max 7 MB.`);
@@ -1310,35 +1418,20 @@
                 return;
             }
 
-            setUploadState(true, 'Uploading Cover (GIF/Image)...');
-            // Cover: wider crop, slightly lower quality to keep size manageable
-            compressImage(file, 1400, 0.82, async (base64) => {
-                try {
-                    const res = await fetch(`${API}/api/users/profile`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                        body: JSON.stringify({ cover_photo: base64 })
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                        showToast('Cover updated successfully! ✅');
-                        if (data.user) {
-                            myUser = { ...myUser, ...data.user };
-                            localStorage.setItem('chet_user', JSON.stringify(myUser));
-                            renderProfile(myUser);
-                        } else {
-                            loadProfileData();
-                        }
-                    } else {
-                        showToast(data.error || 'Upload failed');
-                    }
-                } catch(err) {
-                    showToast('Upload error — check connection');
-                } finally {
-                    e.target.value = '';
-                    setUploadState(false);
-                }
-            });
+            if (file.type === 'image/gif' || file.type === 'image/webp') {
+                setUploadState(true, 'Uploading Cover (GIF/Sticker)...');
+                compressImage(file, 1400, 0.82, async (base64) => {
+                    uploadProfileImage('cover', base64);
+                });
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                currentFileMime = file.type;
+                openCropper(evt.target.result, 'cover');
+            };
+            reader.readAsDataURL(file);
         }
 
         // Actions: Call & Message
