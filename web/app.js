@@ -320,6 +320,13 @@ joinBtn.addEventListener('click', async () => {
         switchScreen('call');
         changeAppState('CONNECTING', 'Connecting...');
         hangupBtn.disabled = false;
+        
+        // Save session for reload
+        sessionStorage.setItem('activeCall', JSON.stringify({
+            callId: currentCallId,
+            sessionId: sessionId
+        }));
+        
         socket.emit('join_call', currentCallId);
         log('Joined call:', currentCallId);
     } catch (e) {
@@ -653,6 +660,8 @@ function cleanupCall(isManual = false) {
     if (remoteMicStatus) remoteMicStatus.classList.add('hidden');
     if (localVideoStatus) localVideoStatus.classList.add('hidden');
 
+    sessionStorage.removeItem('activeCall');
+
     setTimeout(() => switchScreen('join'), isManual ? 1500 : 2500);
 }
 
@@ -842,6 +851,66 @@ socket.on('peer_action', (data) => {
             remoteVideo.classList.add('is-screen-share');
         } else {
             remoteVideo.classList.remove('is-screen-share');
+        }
+    }
+});
+
+// ─── AUTO-REJOIN ON RELOAD ────────────────────────────────────────────────────
+window.addEventListener('load', async () => {
+    const savedCall = sessionStorage.getItem('activeCall');
+    if (savedCall) {
+        try {
+            const data = JSON.parse(savedCall);
+            callIdInput.value = data.callId;
+            sessionId = data.sessionId;
+            
+            currentCallId = data.callId;
+            manualHangup = false;
+            secondsConnected = 0;
+            updateTimerDisplay();
+            RecoveryManager.reset();
+            
+            joinBtn.disabled = true;
+            await fetchTurnCredentials();
+            
+            localStream = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                video: false
+            });
+            
+            isVideoMuted = true;
+            videoBtn.classList.add('active'); 
+            videoBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+            
+            const localContainer = document.querySelector('.local-video-container');
+            if (localContainer) localContainer.style.display = 'none';
+            localVideo.srcObject = localStream;
+            localVideo.classList.remove('pip-active');
+            videoBtn.disabled = false;
+            switchCameraBtn.disabled = true;
+            
+            if (!navigator.mediaDevices.getDisplayMedia) {
+                screenShareBtn.style.display = 'none';
+            }
+            
+            switchScreen('call');
+            changeAppState('RECONNECTING', 'Restoring call...');
+            hangupBtn.disabled = false;
+            
+            if (socket.connected) {
+                log('[RECOVERY] Auto-rejoin firing resume_call');
+                socket.emit('resume_call', { callId: currentCallId, sessionId }, (res) => {
+                    if (res && res.status === 'resume_ok') {
+                        log('[RECOVERY] Session resumed on reload');
+                    } else {
+                        changeAppState('FAILED', 'Session expired. Please rejoin.');
+                        cleanupCall(false);
+                    }
+                });
+            }
+        } catch (e) {
+            log('Failed to auto-restore call:', e.message);
+            sessionStorage.removeItem('activeCall');
         }
     }
 });
