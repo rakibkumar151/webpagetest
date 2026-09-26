@@ -118,7 +118,9 @@ function updateTimerDisplay() {
     
     // Auto-save state for seamless reload
     if (currentCallId) {
+        const prev = JSON.parse(sessionStorage.getItem('activeCall') || '{}');
         sessionStorage.setItem('activeCall', JSON.stringify({
+            ...prev,
             callId: currentCallId,
             sessionId: sessionId,
             secondsConnected: secondsConnected,
@@ -424,7 +426,9 @@ joinBtn.addEventListener('click', async () => {
         hangupBtn.disabled = false;
         
         // Save session for reload
+        const prevCall = JSON.parse(sessionStorage.getItem('activeCall') || '{}');
         sessionStorage.setItem('activeCall', JSON.stringify({
+            ...prevCall,
             callId: currentCallId,
             sessionId: sessionId
         }));
