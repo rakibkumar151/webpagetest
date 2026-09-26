@@ -348,15 +348,15 @@
     
     function formatLastActive(isoString) {
         if (!isoString) return 'Active a long time ago';
-        const d = new Date(isoString);
-        if (isNaN(d.getTime())) {
-            // It might be a sqlite UTC string, try appending Z
-            const d2 = new Date(isoString + 'Z');
-            if (isNaN(d2.getTime())) return 'Active a long time ago';
-            else isoString = isoString + 'Z';
+        // If SQLite date doesn't have a Z or timezone, make it UTC
+        let safeIso = isoString;
+        if (!safeIso.includes('Z') && !safeIso.includes('+')) {
+            safeIso = safeIso.replace(' ', 'T') + 'Z';
         }
+        const d = new Date(safeIso);
+        if (isNaN(d.getTime())) return 'Active a long time ago';
         
-        const diff = Math.floor((new Date() - new Date(isoString)) / 1000);
+        const diff = Math.floor((new Date() - d) / 1000);
         if (diff < 60) return `Active ${Math.max(1, diff)}s ago`;
         const m = Math.floor(diff / 60);
         if (m < 60) return `Active ${m}m ago`;
