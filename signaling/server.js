@@ -81,6 +81,15 @@ if (TURSO_URL && TURSO_TOKEN) {
                     created_at   TEXT DEFAULT (datetime('now'))
                 )
             `);
+            await db.execute(`
+                CREATE TABLE IF NOT EXISTS messages (
+                    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                    from_uid       TEXT NOT NULL,
+                    to_uid         TEXT NOT NULL,
+                    encrypted_text TEXT NOT NULL,
+                    created_at     TEXT DEFAULT (datetime('now'))
+                )
+            `);
             dbReady = true;
             console.log('[DB] Turso connected and tables ready');
         } catch (e) {
@@ -260,6 +269,105 @@ app.get('/api/users', authMiddleware, async (req, res) => {
     }
 });
 
+// ─── CHAT ENCRYPTION ─────────────────────────────────────────────────────────
+// Derive a 32-byte key from JWT_SECRET for AES-256-GCM encryption at rest
+const CHAT_KEY = crypto.createHash('sha256').update(JWT_SECRET).digest();
+
+function encryptMessage(text) {
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', CHAT_KEY, iv);
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    const authTag = cipher.getAuthTag().toString('hex');
+    // Format: iv:authTag:encryptedText
+    return `${iv.toString('hex')}:${authTag}:${encrypted}`;
+}
+
+function decryptMessage(encryptedStr) {
+    try {
+        const [ivHex, authTagHex, encryptedHex] = encryptedStr.split(':');
+        const decipher = crypto.createDecipheriv(
+            'aes-256-gcm',
+            CHAT_KEY,
+            Buffer.from(ivHex, 'hex')
+        );
+        decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
+        let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        return decrypted;
+    } catch (e) {
+        return '[Message decryption failed]';
+    }
+}
+
+// ─── MESSAGES: API ───────────────────────────────────────────────────────────
+// Get chat history
+app.get('/api/messages/:uid', authMiddleware, async (req, res) => {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const otherUid = req.params.uid;
+    const myUid = req.user.uid;
+    try {
+        const result = await db.execute({
+            sql: `SELECT id, from_uid, to_uid, encrypted_text, created_at FROM messages 
+                  WHERE (from_uid = ? AND to_uid = ?) OR (from_uid = ? AND to_uid = ?)
+                  ORDER BY created_at ASC LIMIT 100`,
+            args: [myUid, otherUid, otherUid, myUid]
+        });
+        
+        // Decrypt on the fly
+        const messages = result.rows.map(row => ({
+            id: row.id,
+            from_uid: row.from_uid,
+            to_uid: row.to_uid,
+            text: decryptMessage(row.encrypted_text),
+            created_at: row.created_at
+        }));
+        
+        res.json(messages);
+    } catch (e) {
+        console.error('[CHAT] Fetch error:', e.message);
+        res.status(500).json({ error: 'Failed to load messages' });
+    }
+});
+
+// Send message
+app.post('/api/messages', authMiddleware, async (req, res) => {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { to_uid, text } = req.body;
+    const from_uid = req.user.uid;
+    
+    if (!to_uid || !text) return res.status(400).json({ error: 'Target and text required' });
+    
+    try {
+        const encrypted = encryptMessage(text);
+        const result = await db.execute({
+            sql: `INSERT INTO messages (from_uid, to_uid, encrypted_text) VALUES (?, ?, ?) RETURNING id, created_at`,
+            args: [from_uid, to_uid, encrypted]
+        });
+        
+        const newMsg = {
+            id: result.rows[0].id,
+            from_uid,
+            to_uid,
+            text, // Send back raw text to caller
+            created_at: result.rows[0].created_at
+        };
+
+        // If target is connected via Socket, push it real-time
+        if (globalUserSockets.has(to_uid)) {
+            const socketIds = globalUserSockets.get(to_uid);
+            for (let sId of socketIds) {
+                io.to(sId).emit('new_message', newMsg);
+            }
+        }
+        
+        res.json(newMsg);
+    } catch (e) {
+        console.error('[CHAT] Send error:', e.message);
+        res.status(500).json({ error: 'Failed to send message' });
+    }
+});
+
 // ─── SIGNALING ────────────────────────────────────────────────────────────────
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -273,9 +381,23 @@ const io = new Server(server, {
 });
 
 const roomSessions = new Map();
+const globalUserSockets = new Map(); // Map<uid, Set<socketId>>
 
 io.on('connection', (socket) => {
     console.log(`[SOCKET] connect   id=${socket.id}`);
+
+    // Auth for real-time chat push
+    socket.on('register_user', (token) => {
+        try {
+            const user = jwt.verify(token, JWT_SECRET);
+            socket.data.uid = user.uid;
+            if (!globalUserSockets.has(user.uid)) globalUserSockets.set(user.uid, new Set());
+            globalUserSockets.get(user.uid).add(socket.id);
+            console.log(`[SOCKET] Registered user ${user.uid} on socket ${socket.id}`);
+        } catch(e) {
+            console.error('[SOCKET] register_user failed: Invalid token');
+        }
+    });
 
     socket.on('join_call', (data) => {
         let callId    = typeof data === 'string' ? data : data.callId;
@@ -344,6 +466,15 @@ io.on('connection', (socket) => {
     socket.on('peer_action',   (data) => { if (!data?.callId) return; socket.to(data.callId).emit('peer_action', data); });
 
     socket.on('disconnecting', () => {
+        // Remove from global chat map
+        if (socket.data.uid) {
+            const sSet = globalUserSockets.get(socket.data.uid);
+            if (sSet) {
+                sSet.delete(socket.id);
+                if (sSet.size === 0) globalUserSockets.delete(socket.data.uid);
+            }
+        }
+
         const { callId, sessionId } = socket.data;
         if (!callId) return;
         console.log(`[SOCKET] disconnect callId=${callId} id=${socket.id}`);
