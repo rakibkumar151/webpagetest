@@ -302,6 +302,13 @@ app.post('/api/users/profile-photo', authMiddleware, async (req, res) => {
             sql: `UPDATE users SET profile_photo = ? WHERE uid = ?`,
             args: [profile_photo || null, req.user.uid]
         });
+
+        // Broadcast real-time profile update to ALL connected users
+        io.emit('profile_updated', {
+            uid: req.user.uid,
+            profile_photo: profile_photo || null
+        });
+
         res.json({ success: true });
     } catch (e) {
         console.error('[USERS] Profile photo upload error:', e.message);

@@ -756,6 +756,22 @@ loadUsers().then(() => {
             }
         });
 
+        // ── Real-time profile photo update ──
+        socket.on('profile_updated', (data) => {
+            // Update in users list
+            const user = allUsers.find(u => u.uid === data.uid);
+            if (user) {
+                user.profile_photo = data.profile_photo;
+                renderUsers(allUsers);
+            }
+            // If it's me, update my own nav avatar too
+            if (data.uid === me.uid) {
+                me.profile_photo = data.profile_photo;
+                localStorage.setItem('chet_user', JSON.stringify(me));
+                initProfile();
+            }
+        });
+
         // ── Incoming Call on Home Page ──
         let homeIncomingCall = null;
         let homeCallTimer = null;

@@ -1532,6 +1532,31 @@
             socket.on('call_missed', () => {
                 dismissIncomingCall();
             });
+
+            // ── Real-time profile photo update ──
+            socket.on('profile_updated', (data) => {
+                // If partner updated their photo
+                if (data.uid === partner.uid) {
+                    partner.profile_photo = data.profile_photo;
+                    sessionStorage.setItem('chatPartner', JSON.stringify(partner));
+                    // Update chat header avatar
+                    const avatarEl = document.getElementById('chatAvatar');
+                    if (avatarEl) {
+                        if (data.profile_photo) {
+                            avatarEl.innerHTML = `<img src="${data.profile_photo}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+                            avatarEl.style.background = 'transparent';
+                        } else {
+                            avatarEl.innerHTML = '';
+                            avatarEl.textContent = getInitials(partner.first_name, partner.last_name);
+                        }
+                    }
+                }
+                // If it's me, update localStorage
+                if (data.uid === me.uid) {
+                    me.profile_photo = data.profile_photo;
+                    localStorage.setItem('chet_user', JSON.stringify(me));
+                }
+            });
         };
         document.body.appendChild(s);
     }
