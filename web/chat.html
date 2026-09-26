@@ -125,7 +125,7 @@
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 12px;
             
             /* Hide scrollbar */
             scrollbar-width: none; /* Firefox */
@@ -148,8 +148,8 @@
             border-radius: 20px;
             font-size: 14.5px;
             line-height: 1.4;
+            overflow-wrap: break-word;
             word-wrap: break-word;
-            overflow-wrap: anywhere;
             white-space: pre-wrap;
             position: relative;
         }
@@ -223,14 +223,9 @@
             max-height: 120px;
             overflow-y: auto;
             line-height: 20px;
-            word-wrap: break-word;
+            overflow-wrap: break-word;
+            word-break: break-all;
             white-space: pre-wrap;
-            /* Hide scrollbar */
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
-        .chat-input::-webkit-scrollbar {
-            display: none;
         }
         .chat-input:focus { border-color: var(--accent1); }
         .send-btn {
