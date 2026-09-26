@@ -35,10 +35,15 @@
             font-family: 'Inter', sans-serif;
             background: var(--bg);
             color: var(--text);
-            height: 100vh;
+            /* Bulletproof viewport lock */
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            height: 100dvh;
+            width: 100vw;
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            margin: 0; padding: 0;
         }
 
         /* Top Nav */
@@ -163,6 +168,9 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            flex-shrink: 0; /* Prevents being crushed or pushed out */
+            position: relative;
+            z-index: 10;
         }
         .chat-tool-btn {
             width: 38px; height: 38px;
