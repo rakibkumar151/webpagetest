@@ -1395,6 +1395,11 @@
             }
 
             if (file.type === 'image/gif' || file.type === 'image/webp') {
+                if (file.size > 1.5 * 1024 * 1024) {
+                    showToast(`GIF/Sticker too large (${mb} MB). Max 1.5 MB to prevent lag.`);
+                    e.target.value = '';
+                    return;
+                }
                 setUploadState(true, 'Uploading Avatar (GIF/Sticker)...');
                 compressImage(file, 400, 0.85, async (base64) => {
                     uploadProfileImage('avatar', base64);
@@ -1423,6 +1428,11 @@
             }
 
             if (file.type === 'image/gif' || file.type === 'image/webp') {
+                if (file.size > 1.5 * 1024 * 1024) {
+                    showToast(`GIF/Sticker too large (${mb} MB). Max 1.5 MB to prevent lag.`);
+                    e.target.value = '';
+                    return;
+                }
                 setUploadState(true, 'Uploading Cover (GIF/Sticker)...');
                 compressImage(file, 1400, 0.82, async (base64) => {
                     uploadProfileImage('cover', base64);
