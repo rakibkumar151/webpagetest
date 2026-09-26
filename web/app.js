@@ -1302,6 +1302,8 @@ window.currentVideoConstraints = qualityConfigs['480'];
 
 const qualityBtn = document.getElementById('qualityBtn');
 const qualityMenu = document.getElementById('qualityMenu');
+const qualityLockToggle = document.getElementById('qualityLockToggle');
+let isQualityLocked = false;
 // qualityIndicator and qualityText already declared above
 
 if (qualityBtn && qualityMenu) {
@@ -1316,6 +1318,14 @@ if (qualityBtn && qualityMenu) {
         }
     });
 
+    if (qualityLockToggle) {
+        qualityLockToggle.addEventListener('change', (e) => {
+            isQualityLocked = e.target.checked;
+            const activeBtn = qualityMenu.querySelector('button.active');
+            if (activeBtn) activeBtn.click();
+        });
+    }
+
     qualityMenu.querySelectorAll('button').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             qualityMenu.querySelectorAll('button').forEach(b => b.classList.remove('active'));
@@ -1323,9 +1333,15 @@ if (qualityBtn && qualityMenu) {
             qualityMenu.classList.add('hidden');
             
             const q = btn.getAttribute('data-quality');
-            window.currentVideoConstraints = qualityConfigs[q];
+            const conf = qualityConfigs[q];
             
-            log('Quality changed to: ' + q + 'p');
+            window.currentVideoConstraints = isQualityLocked ? {
+                width: { exact: conf.width.ideal },
+                height: { exact: conf.height.ideal },
+                frameRate: { exact: conf.frameRate.ideal }
+            } : conf;
+            
+            log(`Quality changed to: ${q}p (Locked: ${isQualityLocked})`);
 
             let trackToUpdate = null;
             if (isScreenSharing && screenStream) {
@@ -1343,6 +1359,12 @@ if (qualityBtn && qualityMenu) {
                     log('Applied new constraints successfully');
                 } catch(err) {
                     log('Failed to apply constraints: ' + err.message);
+                    if (isQualityLocked) {
+                        log('Device does not support exactly ' + q + 'p. Reverting lock.');
+                        if (qualityLockToggle) qualityLockToggle.checked = false;
+                        isQualityLocked = false;
+                        btn.click();
+                    }
                 }
             }
         });
