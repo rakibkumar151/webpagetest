@@ -881,7 +881,14 @@ socket.on('offer', async ({ description }) => {
 
 socket.on('answer', async ({ description }) => {
     if (!pc || manualHangup) return;
-    try { await pc.setRemoteDescription(description); log('Remote answer applied'); }
+    try { 
+        await pc.setRemoteDescription(description); 
+        log('Remote answer applied'); 
+        
+        for (const c of pendingCandidates) await pc.addIceCandidate(c);
+        if (pendingCandidates.length) log(`Flushed ${pendingCandidates.length} queued candidates`);
+        pendingCandidates = [];
+    }
     catch (err) { log('Error applying answer:', err.message); }
 });
 
