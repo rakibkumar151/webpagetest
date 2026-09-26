@@ -408,6 +408,10 @@
         return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
     
+    function getInitials(first, last) {
+        return ((first || '')[0] || '') + ((last || '')[0] || '');
+    }
+    
     function appendMessage(msg) {
         const isMe = msg.from_uid === me.uid;
         const row = document.createElement('div');
@@ -447,6 +451,17 @@
         if (!isMe && socket && socket.connected) {
             socket.emit('mark_seen', { message_id: msg.id, to_uid: partner.uid });
         }
+        
+        // Auto-load duration for audio
+        if (payload.type === 'audio') {
+            const btn = row.querySelector('.voice-play-btn');
+            const timeEl = row.querySelector('.voice-time');
+            const tempAudio = new Audio(payload.url);
+            tempAudio.addEventListener('loadedmetadata', () => {
+                const dur = Math.floor(tempAudio.duration) || 0;
+                timeEl.textContent = `0:${dur < 10 ? '0'+dur : dur}`;
+            });
+        }
     }
     
     function updateSeenIndicator(msgId) {
@@ -463,18 +478,6 @@
             `;
             msgDiv.insertAdjacentHTML('beforeend', seenHTML);
             scrollToBottom();
-        }
-    }
-        
-        // Auto-load duration for audio
-        if (payload.type === 'audio') {
-            const btn = row.querySelector('.voice-play-btn');
-            const timeEl = row.querySelector('.voice-time');
-            const tempAudio = new Audio(payload.url);
-            tempAudio.addEventListener('loadedmetadata', () => {
-                const dur = Math.floor(tempAudio.duration) || 0;
-                timeEl.textContent = `0:${dur < 10 ? '0'+dur : dur}`;
-            });
         }
     }
     
