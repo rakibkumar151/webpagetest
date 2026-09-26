@@ -231,10 +231,7 @@ async function fetchTurnCredentials() {
     }
 
     try {
-        const token = localStorage.getItem('chet_token') || sessionStorage.getItem('chet_token');
-        const res  = await fetch(`${SIGNALING_URL}/api/turn-credentials`, {
-            headers: { 'Authorization': 'Bearer ' + token }
-        });
+        const res  = await fetch(`${SIGNALING_URL}/api/turn-credentials`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
@@ -712,9 +709,8 @@ function saveCallLogToDB(status, duration) {
             const p = JSON.parse(pStr);
             const API = window.APP_CONFIG?.SIGNALING_URL || window.location.origin;
             if (isCaller) {
-                fetch(`${API}/api/messages`, {
+                return fetch(`${API}/api/messages`, {
                     method: 'POST',
-                    keepalive: true,
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                     body: JSON.stringify({
                         to_uid: p.uid,
@@ -727,9 +723,11 @@ function saveCallLogToDB(status, duration) {
                 }).catch(()=>{});
             } else {
                 sessionStorage.setItem('pendingCallLog', JSON.stringify({ status, duration }));
+                return Promise.resolve();
             }
         }
     } catch(e) {}
+    return Promise.resolve();
 }
 
 function cleanupCall(isManual = false) {
@@ -916,9 +914,9 @@ socket.on('connect', () => {
 });
 
 // ─── CALL REJECTED BY CALLEE ──────────────────────────────────────────────────
-socket.on('call_rejected', () => {
+socket.on('call_rejected', async () => {
     log('[CALL] Call was rejected by callee');
-    saveCallLogToDB('rejected', 0);
+    await saveCallLogToDB('rejected', 0);
     sessionStorage.removeItem('activeCall');
     manualHangup = true;
     manualHangup_logSaved = true; // already saving as rejected
@@ -937,9 +935,9 @@ socket.on('call_rejected', () => {
 });
 
 // ─── CALL MISSED (no answer) ───────────────────────────────────────────────────
-socket.on('call_missed', () => {
+socket.on('call_missed', async () => {
     log('[CALL] Call timed out — no answer');
-    saveCallLogToDB('missed', 0);
+    await saveCallLogToDB('missed', 0);
     sessionStorage.removeItem('activeCall');
     manualHangup = true;
     manualHangup_logSaved = true;
@@ -1219,7 +1217,7 @@ window.addEventListener('load', async () => {
         try {
             const callData = JSON.parse(sessionStorage.getItem('activeCall') || '{}');
             if (callData.isCaller === true) {
-                window._callerWatchdog = setTimeout(() => {
+                window._callerWatchdog = setTimeout(async () => {
                     if (['CONNECTED', 'ENDED', 'FAILED'].includes(appState)) return; // already connected or done
                     log('[WATCHDOG] No answer in 20s — giving up');
                     // Notify callee
@@ -1230,7 +1228,7 @@ window.addEventListener('load', async () => {
                     }
                     // Save missed log
                     manualHangup_logSaved = true;
-                    saveCallLogToDB('missed', 0);
+                    await saveCallLogToDB('missed', 0);
                     sessionStorage.removeItem('activeCall');
                     if (pc) { pc.close(); pc = null; }
                     if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
