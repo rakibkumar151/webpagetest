@@ -439,7 +439,7 @@
         <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         <input type="text" id="searchInput" placeholder="Search people by name, username or UID..." autocomplete="off">
     </div>
-    <div class="nav-profile">
+    <div class="nav-profile" onclick="window.location.href='profile.html?uid=' + (me ? me.uid : '')" title="View Profile">
         <div class="avatar" id="navAvatar">?</div>
         <span class="nav-name" id="navName">Loading...</span>
     </div>
@@ -448,9 +448,9 @@
 
 <main>
     <!-- Profile Card -->
-    <div class="profile-card" id="profileCard" style="display:none">
+    <div class="profile-card" id="profileCard" style="display:none; cursor:pointer" onclick="window.location.href='profile.html?uid=' + (me ? me.uid : '')">
         <input type="file" id="profilePicInput" accept="image/*" style="display:none" onchange="uploadProfilePic(event)">
-        <div class="profile-avatar" id="profileAvatar" onclick="document.getElementById('profilePicInput').click()" title="Add your profile photo">
+        <div class="profile-avatar" id="profileAvatar" onclick="event.stopPropagation(); document.getElementById('profilePicInput').click()" title="Change profile photo">
             <span id="profileAvatarText">?</span>
             <div class="avatar-overlay">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
@@ -460,7 +460,7 @@
         <div class="profile-info">
             <div class="profile-name" id="profileName">Loading...</div>
             <div class="profile-username" id="profileUsername">@username</div>
-            <div class="uid-badge" id="uidBadge" onclick="copyUID()" title="Click to copy">
+            <div class="uid-badge" id="uidBadge" onclick="event.stopPropagation(); copyUID()" title="Click to copy">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                 <span id="uidText">UID...</span>
             </div>
@@ -687,7 +687,7 @@ function renderUsers(users) {
     }
 
     list.innerHTML = users.map((u, i) => `
-        <div class="user-card" data-uid="${esc(u.uid)}" style="animation-delay:${i * 0.04}s" onclick="startCall(${JSON.stringify(u).replace(/"/g, '&quot;')})">
+        <div class="user-card" data-uid="${esc(u.uid)}" style="animation-delay:${i * 0.04}s" onclick="window.location.href='profile.html?uid=${esc(u.uid)}'">
             <div class="avatar" style="background:${getColor(u.uid)}">
                 ${u.profile_photo ? `<img src="${u.profile_photo}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;position:absolute;top:0;left:0;">` : initials(u)}
                 <div style="position:absolute; bottom:0; right:0; width:12px; height:12px; border-radius:50%; border:2px solid var(--surface); background:${u.is_online ? '#10b981' : '#6b7280'}" class="status-dot"></div>
@@ -697,8 +697,8 @@ function renderUsers(users) {
                     ${esc(u.first_name)} ${esc(u.last_name)}
                     ${u.is_verified ? `<span class="verified-badge"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="#1d9bf0"/><path d="M9.5 16.5l-3-3 1.4-1.4 1.6 1.6 5.6-5.6 1.4 1.4z" fill="#fff"/></svg><span class="badge-tooltip">Verified Account</span></span>` : ''}
                 </div>
+                ${u.tagline ? `<div style="font-size:12px;color:rgba(255,255,255,0.7);font-weight:500;margin-top:2px;">${esc(u.tagline)}</div>` : ''}
                 <div class="user-card-sub" data-status-uid="${esc(u.uid)}">@${esc(u.username)} &bull; ${u.is_online ? '<span style="color:#10b981">Active now</span>' : esc(formatLastActive(u.last_active))}</div>
-                <div class="user-card-uid">${esc(u.uid)}</div>
             </div>
             <div class="user-card-actions">
                 <button class="action-btn call-btn" title="Voice Call" onclick="event.stopPropagation(); startCall(${JSON.stringify(u).replace(/"/g, '&quot;')})">

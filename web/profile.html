@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Profile - Secure Voice</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #090c13;
+            --surface: #121824;
+            --surface-card: #182030;
+            --border: rgba(255, 255, 255, 0.08);
+            --border-hover: rgba(255, 255, 255, 0.16);
+            --accent1: #7c6cff;
+            --accent2: #a855f7;
+            --text: #f3f4f6;
+            --muted: #9ca3af;
+            --verified-blue: #1d9bf0;
+            --online-green: #10b981;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+        }
+
+        .profile-container {
+            width: 100%;
+            max-width: 900px;
+            background: var(--surface);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+        }
+
+        /* ─── COVER BANNER ─── */
+        .cover-container {
+            width: 100%;
+            height: 220px;
+            position: relative;
+            background: linear-gradient(135deg, #1e1b4b, #311b92, #4a148c);
+            background-size: cover;
+            background-position: center;
+            overflow: hidden;
+        }
+
+        .cover-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.1) 60%, rgba(18,24,36,0.8) 100%);
+        }
+
+        .cover-actions {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            right: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.45);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .icon-btn:hover {
+            background: rgba(0, 0, 0, 0.7);
+            transform: scale(1.05);
+        }
+
+        .change-cover-btn {
+            position: absolute;
+            right: 16px;
+            bottom: 16px;
+            background: rgba(0, 0, 0, 0.55);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+            z-index: 10;
+        }
+
+        .change-cover-btn:hover {
+            background: rgba(0, 0, 0, 0.8);
+        }
+
+        /* ─── MAIN CONTENT ─── */
+        .profile-body {
+            padding: 0 24px 40px 24px;
+            position: relative;
+        }
+
+        /* Top Row: Avatar & Action Buttons */
+        .avatar-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-top: -65px;
+            margin-bottom: 20px;
+            position: relative;
+            z-index: 5;
+        }
+
+        .avatar-wrapper {
+            position: relative;
+            width: 130px;
+            height: 130px;
+            border-radius: 50%;
+            border: 4px solid var(--surface);
+            background: var(--surface-card);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            flex-shrink: 0;
+        }
+
+        .avatar-img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .avatar-placeholder {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 42px;
+            font-weight: 800;
+            color: #ffffff;
+            background: linear-gradient(135deg, var(--accent1), var(--accent2));
+        }
+
+        .status-badge {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: var(--online-green);
+            border: 3.5px solid var(--surface);
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+        }
+
+        .status-badge.offline {
+            background: #6b7280;
+            box-shadow: none;
+        }
+
+        .action-buttons {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-bottom: 6px;
+        }
+
+        .btn-edit {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border-hover);
+            color: #ffffff;
+            padding: 10px 22px;
+            border-radius: 24px;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-edit:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .btn-action-primary {
+            background: linear-gradient(135deg, var(--accent1), var(--accent2));
+            border: none;
+            color: #ffffff;
+            padding: 10px 22px;
+            border-radius: 24px;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 14px rgba(124, 108, 255, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-action-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(124, 108, 255, 0.45);
+        }
+
+        .btn-action-secondary {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border);
+            color: #ffffff;
+            padding: 10px 18px;
+            border-radius: 24px;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-action-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        /* Profile Details Text */
+        .user-names {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 12px;
+        }
+
+        .name-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .display-name {
+            font-size: 26px;
+            font-weight: 800;
+            color: #ffffff;
+            letter-spacing: -0.5px;
+        }
+
+        .verified-badge {
+            display: inline-flex;
+            align-items: center;
+        }
+        .verified-badge svg {
+            width: 22px;
+            height: 22px;
+        }
+
+        .username-text {
+            font-size: 15px;
+            color: var(--muted);
+            font-weight: 500;
+        }
+
+        .tagline-text {
+            font-size: 15px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.85);
+            margin-bottom: 10px;
+            line-height: 1.4;
+        }
+
+        .bio-text {
+            font-size: 15px;
+            color: #e5e7eb;
+            line-height: 1.55;
+            margin-bottom: 18px;
+            white-space: pre-line;
+            max-width: 680px;
+        }
+
+        /* Meta Info (Location & Joined Date) */
+        .meta-info-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 24px;
+            color: var(--muted);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .meta-item svg {
+            color: #9ca3af;
+            flex-shrink: 0;
+        }
+
+        /* ─── EDIT MODAL ─── */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-card {
+            background: #161c2a;
+            border: 1px solid var(--border-hover);
+            border-radius: 20px;
+            width: 100%;
+            max-width: 520px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 24px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 14px;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--muted);
+            font-size: 24px;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-group label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--muted);
+        }
+
+        .form-group input, .form-group textarea {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 14px;
+            color: #ffffff;
+            font-family: inherit;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus, .form-group textarea:focus {
+            border-color: var(--accent1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .photo-upload-row {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn-upload-small {
+            flex: 1;
+            background: rgba(255,255,255,0.06);
+            border: 1px dashed var(--border-hover);
+            border-radius: 10px;
+            padding: 12px;
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            transition: background 0.2s;
+        }
+
+        .btn-upload-small:hover {
+            background: rgba(255,255,255,0.12);
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .btn-cancel {
+            background: rgba(255,255,255,0.08);
+            border: none;
+            color: #fff;
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-family: inherit;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-save {
+            background: linear-gradient(135deg, var(--accent1), var(--accent2));
+            border: none;
+            color: #fff;
+            padding: 10px 22px;
+            border-radius: 10px;
+            font-family: inherit;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: rgba(18, 24, 36, 0.95);
+            border: 1px solid var(--accent1);
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 1000;
+        }
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* Responsive Mobile Adjustments matching prompt images */
+        @media (max-width: 640px) {
+            .cover-container {
+                height: 170px;
+            }
+            .avatar-wrapper {
+                width: 105px;
+                height: 105px;
+            }
+            .avatar-row {
+                margin-top: -50px;
+            }
+            .display-name {
+                font-size: 22px;
+            }
+            .profile-body {
+                padding: 0 16px 30px 16px;
+            }
+            .action-buttons {
+                gap: 6px;
+            }
+            .btn-edit, .btn-action-primary {
+                padding: 8px 16px;
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="profile-container">
+
+        <!-- Cover Banner -->
+        <div class="cover-container" id="coverBanner">
+            <div class="cover-overlay"></div>
+            <div class="cover-actions">
+                <button class="icon-btn" onclick="window.location.href='home.html'" title="Back to Home">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                </button>
+                <button class="icon-btn" id="settingsBtn" onclick="openEditModal()" title="Settings">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                </button>
+            </div>
+            <button class="change-cover-btn" id="changeCoverBtn" onclick="document.getElementById('coverInput').click()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                Change Cover
+            </button>
+            <input type="file" id="coverInput" accept="image/*" style="display:none" onchange="handleCoverUpload(event)">
+        </div>
+
+        <!-- Main Body -->
+        <div class="profile-body">
+            
+            <!-- Avatar & Actions -->
+            <div class="avatar-row">
+                <div class="avatar-wrapper" id="avatarContainer">
+                    <div class="avatar-placeholder" id="avatarText">?</div>
+                    <div class="status-badge" id="statusBadge"></div>
+                </div>
+                <div class="action-buttons" id="actionButtons">
+                    <!-- Loaded dynamically (Edit Profile or Call/Message) -->
+                </div>
+            </div>
+
+            <!-- Names -->
+            <div class="user-names">
+                <div class="name-row">
+                    <h1 class="display-name" id="displayName">Loading...</h1>
+                    <div id="verifiedContainer"></div>
+                </div>
+                <div class="username-text" id="usernameDisplay">@username</div>
+            </div>
+
+            <!-- Tagline -->
+            <div class="tagline-text" id="taglineDisplay" style="display:none"></div>
+
+            <!-- Bio -->
+            <div class="bio-text" id="bioDisplay" style="display:none"></div>
+
+            <!-- Meta Details: Location & Joined Date -->
+            <div class="meta-info-row">
+                <div class="meta-item" id="locationItem" style="display:none">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                    <span id="locationText">Dhaka, Bangladesh</span>
+                </div>
+                <div class="meta-item">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                    <span id="joinedText">Joined Date</span>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Edit Profile Modal -->
+    <div class="modal-overlay" id="editModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2 class="modal-title">Edit Profile</h2>
+                <button class="modal-close" onclick="closeEditModal()">&times;</button>
+            </div>
+            
+            <div class="form-group">
+                <label>First Name</label>
+                <input type="text" id="inputFirstName" placeholder="First Name">
+            </div>
+            <div class="form-group">
+                <label>Last Name</label>
+                <input type="text" id="inputLastName" placeholder="Last Name">
+            </div>
+            <div class="form-group">
+                <label>Tagline (e.g. Dreamer | Developer | Traveller)</label>
+                <input type="text" id="inputTagline" placeholder="Short tagline">
+            </div>
+            <div class="form-group">
+                <label>Bio</label>
+                <textarea id="inputBio" placeholder="Tell the world about yourself..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>Location</label>
+                <input type="text" id="inputLocation" placeholder="e.g. Dhaka, Bangladesh">
+            </div>
+
+            <div class="form-group">
+                <label>Upload Images</label>
+                <div class="photo-upload-row">
+                    <div class="btn-upload-small" onclick="document.getElementById('avatarInput').click()">
+                        📷 Change Avatar
+                    </div>
+                    <div class="btn-upload-small" onclick="document.getElementById('coverInput').click()">
+                        🖼️ Change Cover
+                    </div>
+                </div>
+                <input type="file" id="avatarInput" accept="image/*" style="display:none" onchange="handleAvatarUpload(event)">
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeEditModal()">Cancel</button>
+                <button class="btn-save" onclick="saveProfileChanges()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API = (window.APP_CONFIG && window.APP_CONFIG.SIGNALING_URL) || window.location.origin;
+        const token = localStorage.getItem('chet_token');
+        let myUser = JSON.parse(localStorage.getItem('chet_user') || '{}');
+
+        // Target profile UID from URL query (e.g. profile.html?uid=UID1819957)
+        const urlParams = new URLSearchParams(window.location.search);
+        let profileUid = urlParams.get('uid') || myUser.uid;
+        let isOwnProfile = (profileUid === myUser.uid);
+
+        let currentProfileData = null;
+        let socket = null;
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2500);
+        }
+
+        function formatJoinedDate(isoString) {
+            if (!isoString) return 'Joined Recently';
+            let safeIso = isoString;
+            if (!safeIso.includes('Z') && !safeIso.includes('+')) safeIso += 'Z';
+            const date = new Date(safeIso);
+            if (isNaN(date.getTime())) return 'Joined Recently';
+            
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            return `Joined ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+        }
+
+        function renderProfile(user) {
+            currentProfileData = user;
+
+            // 1. Cover Photo
+            const coverBanner = document.getElementById('coverBanner');
+            if (user.cover_photo) {
+                coverBanner.style.backgroundImage = `url(${user.cover_photo})`;
+            } else {
+                coverBanner.style.backgroundImage = `linear-gradient(135deg, #1e1b4b, #311b92, #4a148c)`;
+            }
+
+            // 2. Avatar & Online status
+            const avatarContainer = document.getElementById('avatarContainer');
+            const avatarText = document.getElementById('avatarText');
+            if (user.profile_photo) {
+                let img = document.getElementById('avatarImgEl');
+                if (!img) {
+                    img = document.createElement('img');
+                    img.id = 'avatarImgEl';
+                    img.className = 'avatar-img';
+                    avatarContainer.appendChild(img);
+                }
+                img.src = user.profile_photo;
+                avatarText.style.display = 'none';
+            } else {
+                const img = document.getElementById('avatarImgEl');
+                if (img) img.remove();
+                avatarText.style.display = 'flex';
+                const initials = (user.first_name ? user.first_name[0] : (user.username ? user.username[0] : '?')).toUpperCase();
+                avatarText.textContent = initials;
+            }
+
+            const statusBadge = document.getElementById('statusBadge');
+            if (user.is_online) {
+                statusBadge.classList.remove('offline');
+            } else {
+                statusBadge.classList.add('offline');
+            }
+
+            // 3. Name & Username
+            document.getElementById('displayName').textContent = `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username;
+            document.getElementById('usernameDisplay').textContent = '@' + user.username;
+
+            // Verified Badge
+            const verContainer = document.getElementById('verifiedContainer');
+            if (user.is_verified) {
+                verContainer.innerHTML = `<span class="verified-badge"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="#1d9bf0"/><path d="M9.5 16.5l-3-3 1.4-1.4 1.6 1.6 5.6-5.6 1.4 1.4z" fill="#fff"/></svg></span>`;
+            } else {
+                verContainer.innerHTML = '';
+            }
+
+            // 4. Tagline
+            const taglineEl = document.getElementById('taglineDisplay');
+            if (user.tagline) {
+                taglineEl.textContent = user.tagline;
+                taglineEl.style.display = 'block';
+            } else {
+                taglineEl.style.display = 'none';
+            }
+
+            // 5. Bio
+            const bioEl = document.getElementById('bioDisplay');
+            if (user.bio) {
+                bioEl.textContent = user.bio;
+                bioEl.style.display = 'block';
+            } else {
+                bioEl.style.display = 'none';
+            }
+
+            // 6. Meta: Location & Joined Date
+            const locItem = document.getElementById('locationItem');
+            if (user.location) {
+                document.getElementById('locationText').textContent = user.location;
+                locItem.style.display = 'flex';
+            } else {
+                locItem.style.display = 'none';
+            }
+
+            document.getElementById('joinedText').textContent = formatJoinedDate(user.created_at);
+
+            // 7. Action Buttons
+            const actionContainer = document.getElementById('actionButtons');
+            const changeCoverBtn = document.getElementById('changeCoverBtn');
+
+            if (isOwnProfile) {
+                changeCoverBtn.style.display = 'flex';
+                actionContainer.innerHTML = `
+                    <button class="btn-edit" onclick="openEditModal()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                        Edit Profile
+                    </button>
+                `;
+            } else {
+                changeCoverBtn.style.display = 'none';
+                actionContainer.innerHTML = `
+                    <button class="btn-action-primary" onclick="startCallFromProfile()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.1a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6 6l1.27-.85a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                        Call
+                    </button>
+                    <button class="btn-action-secondary" onclick="startChatFromProfile()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+                        Message
+                    </button>
+                `;
+            }
+        }
+
+        async function loadProfileData() {
+            try {
+                const endpoint = isOwnProfile ? `${API}/api/auth/me` : `${API}/api/users/${profileUid}`;
+                const res = await fetch(endpoint, {
+                    headers: { Authorization: 'Bearer ' + token }
+                });
+                if (res.status === 401) { window.location.href = 'auth.html'; return; }
+                const data = await res.json();
+                if (data.error) { showToast(data.error); return; }
+
+                if (isOwnProfile) {
+                    myUser = data;
+                    localStorage.setItem('chet_user', JSON.stringify(myUser));
+                }
+                renderProfile(data);
+            } catch(e) {
+                showToast('Failed to load profile');
+            }
+        }
+
+        // Edit Profile Modal
+        function openEditModal() {
+            if (!currentProfileData || !isOwnProfile) return;
+            document.getElementById('inputFirstName').value = currentProfileData.first_name || '';
+            document.getElementById('inputLastName').value = currentProfileData.last_name || '';
+            document.getElementById('inputTagline').value = currentProfileData.tagline || '';
+            document.getElementById('inputBio').value = currentProfileData.bio || '';
+            document.getElementById('inputLocation').value = currentProfileData.location || '';
+            document.getElementById('editModal').classList.add('active');
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').classList.remove('active');
+        }
+
+        async function saveProfileChanges() {
+            const firstName = document.getElementById('inputFirstName').value.trim();
+            const lastName = document.getElementById('inputLastName').value.trim();
+            const tagline = document.getElementById('inputTagline').value.trim();
+            const bio = document.getElementById('inputBio').value.trim();
+            const location = document.getElementById('inputLocation').value.trim();
+
+            try {
+                const res = await fetch(`${API}/api/users/profile`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify({
+                        first_name: firstName,
+                        last_name: lastName,
+                        tagline,
+                        bio,
+                        location
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    closeEditModal();
+                    showToast('Profile updated!');
+                    if (data.user) {
+                        myUser = data.user;
+                        localStorage.setItem('chet_user', JSON.stringify(myUser));
+                        renderProfile(data.user);
+                    } else {
+                        loadProfileData();
+                    }
+                } else {
+                    showToast(data.error || 'Failed to save changes');
+                }
+            } catch(e) {
+                showToast('Error saving profile');
+            }
+        }
+
+        // Image compress helper
+        function compressImage(file, maxPx, quality, callback) {
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+                    if (width > height) {
+                        if (width > maxPx) { height *= maxPx / width; width = maxPx; }
+                    } else {
+                        if (height > maxPx) { width *= maxPx / height; height = maxPx; }
+                    }
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    callback(canvas.toDataURL('image/jpeg', quality));
+                };
+                img.src = evt.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function handleAvatarUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            compressImage(file, 300, 0.85, async (base64) => {
+                const res = await fetch(`${API}/api/users/profile`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ profile_photo: base64 })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Avatar updated!');
+                    loadProfileData();
+                }
+            });
+        }
+
+        function handleCoverUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            compressImage(file, 1000, 0.85, async (base64) => {
+                const res = await fetch(`${API}/api/users/profile`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ cover_photo: base64 })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Cover photo updated!');
+                    loadProfileData();
+                }
+            });
+        }
+
+        // Actions: Call & Message
+        async function startCallFromProfile() {
+            if (!currentProfileData) return;
+            try {
+                const r = await fetch(`${API}/api/calls/initiate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ target_uid: currentProfileData.uid })
+                });
+                if (!r.ok) { showToast('Call initiation failed'); return; }
+                const data = await r.json();
+                sessionStorage.setItem('activeCall', JSON.stringify({
+                    callId: data.callId,
+                    sessionId: data.sessionId,
+                    secondsConnected: 0,
+                    isMuted: false,
+                    isVideoMuted: true,
+                    isCaller: true
+                }));
+                sessionStorage.setItem('callPartner', JSON.stringify(currentProfileData));
+                if (socket) {
+                    socket.emit('incoming_call', {
+                        to_uid: currentProfileData.uid,
+                        caller: myUser,
+                        callId: data.callId
+                    });
+                }
+                window.location.href = 'index.html';
+            } catch(e) {
+                showToast('Connection error');
+            }
+        }
+
+        function startChatFromProfile() {
+            if (!currentProfileData) return;
+            sessionStorage.setItem('chatPartner', JSON.stringify(currentProfileData));
+            window.location.href = 'chat.html';
+        }
+
+        // Realtime Sockets
+        function initSockets() {
+            var s = document.createElement('script');
+            s.src = API + '/socket.io/socket.io.js';
+            s.onload = function() {
+                socket = io(API, { transports: ['websocket', 'polling'] });
+                socket.on('connect', () => socket.emit('register_user', token));
+                
+                socket.on('profile_updated', (updatedUser) => {
+                    if (updatedUser.uid === profileUid) {
+                        loadProfileData();
+                    }
+                });
+
+                socket.on('user_status', (data) => {
+                    if (data.uid === profileUid) {
+                        const badge = document.getElementById('statusBadge');
+                        if (data.is_online) badge.classList.remove('offline');
+                        else badge.classList.add('offline');
+                    }
+                });
+            };
+            document.head.appendChild(s);
+        }
+
+        // Init
+        loadProfileData();
+        initSockets();
+    </script>
+</body>
+</html>

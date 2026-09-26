@@ -99,6 +99,10 @@ if (TURSO_URL && TURSO_TOKEN) {
             try { await db.execute(`ALTER TABLE messages ADD COLUMN read_at TEXT DEFAULT NULL`); } catch(e) {}
             try { await db.execute(`ALTER TABLE messages ADD COLUMN reactions TEXT DEFAULT NULL`); } catch(e) {}
             try { await db.execute(`ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0`); } catch(e) {}
+            try { await db.execute(`ALTER TABLE users ADD COLUMN bio TEXT DEFAULT NULL`); } catch(e) {}
+            try { await db.execute(`ALTER TABLE users ADD COLUMN tagline TEXT DEFAULT NULL`); } catch(e) {}
+            try { await db.execute(`ALTER TABLE users ADD COLUMN location TEXT DEFAULT NULL`); } catch(e) {}
+            try { await db.execute(`ALTER TABLE users ADD COLUMN cover_photo TEXT DEFAULT NULL`); } catch(e) {}
 
             // Create verified_uids table — paneer edits this directly in Turso dashboard
             await db.execute(`
@@ -288,14 +292,35 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
     try {
         const result = await db.execute({
-            sql: `SELECT uid, username, first_name, last_name, email, created_at, profile_photo, is_verified FROM users WHERE uid = ? LIMIT 1`,
+            sql: `SELECT uid, username, first_name, last_name, email, created_at, profile_photo, is_verified, bio, tagline, location, cover_photo FROM users WHERE uid = ? LIMIT 1`,
             args: [req.user.uid]
         });
         if (!result.rows.length) return res.status(404).json({ error: 'User not found' });
         const user = result.rows[0];
         user.is_verified = user.is_verified === 1 || user.is_verified === true;
+        user.is_online = globalUserSockets.has(user.uid);
         res.json(user);
     } catch (e) {
+        res.status(500).json({ error: 'Failed to load profile' });
+    }
+});
+
+// ─── USERS: GET SPECIFIC USER PROFILE ─────────────────────────────────────────
+app.get('/api/users/:uid', authMiddleware, async (req, res) => {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const targetUid = req.params.uid;
+    try {
+        const result = await db.execute({
+            sql: `SELECT uid, username, first_name, last_name, created_at, last_active, profile_photo, is_verified, bio, tagline, location, cover_photo FROM users WHERE uid = ? LIMIT 1`,
+            args: [targetUid]
+        });
+        if (!result.rows.length) return res.status(404).json({ error: 'User not found' });
+        const u = result.rows[0];
+        u.is_verified = u.is_verified === 1 || u.is_verified === true;
+        u.is_online = globalUserSockets.has(u.uid);
+        res.json(u);
+    } catch (e) {
+        console.error('[USERS] Get profile error:', e.message);
         res.status(500).json({ error: 'Failed to load profile' });
     }
 });
@@ -308,14 +333,14 @@ app.get('/api/users', authMiddleware, async (req, res) => {
         let result;
         if (q) {
             result = await db.execute({
-                sql: `SELECT * FROM users
+                sql: `SELECT uid, username, first_name, last_name, created_at, last_active, profile_photo, is_verified, bio, tagline, location, cover_photo FROM users
                       WHERE (username LIKE ? OR first_name LIKE ? OR last_name LIKE ? OR uid LIKE ?)
                       AND uid != ? LIMIT 40`,
                 args: [`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, req.user.uid]
             });
         } else {
             result = await db.execute({
-                sql: `SELECT * FROM users
+                sql: `SELECT uid, username, first_name, last_name, created_at, last_active, profile_photo, is_verified, bio, tagline, location, cover_photo FROM users
                       WHERE uid != ? ORDER BY created_at DESC LIMIT 40`,
                 args: [req.user.uid]
             });
@@ -325,8 +350,13 @@ app.get('/api/users', authMiddleware, async (req, res) => {
             username: u.username,
             first_name: u.first_name,
             last_name: u.last_name,
+            created_at: u.created_at,
             last_active: u.last_active || null,
             profile_photo: u.profile_photo || null,
+            cover_photo: u.cover_photo || null,
+            bio: u.bio || null,
+            tagline: u.tagline || null,
+            location: u.location || null,
             is_online: globalUserSockets.has(u.uid),
             is_verified: u.is_verified === 1 || u.is_verified === true
         }));
@@ -337,12 +367,68 @@ app.get('/api/users', authMiddleware, async (req, res) => {
     }
 });
 
-// ─── USERS: UPDATE PROFILE PHOTO ─────────────────────────────────────────────
+// ─── USERS: UPDATE PROFILE (FULL PROFILE & REALTIME) ──────────────────────────
+app.post('/api/users/profile', authMiddleware, async (req, res) => {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { first_name, last_name, bio, tagline, location, profile_photo, cover_photo } = req.body;
+    
+    if (profile_photo && profile_photo.length > 5 * 1024 * 1024) {
+        return res.status(400).json({ error: 'Profile image too large' });
+    }
+    if (cover_photo && cover_photo.length > 7 * 1024 * 1024) {
+        return res.status(400).json({ error: 'Cover image too large' });
+    }
+
+    try {
+        await db.execute({
+            sql: `UPDATE users SET 
+                    first_name = COALESCE(?, first_name),
+                    last_name  = COALESCE(?, last_name),
+                    bio        = ?,
+                    tagline    = ?,
+                    location   = ?,
+                    profile_photo = COALESCE(?, profile_photo),
+                    cover_photo   = COALESCE(?, cover_photo)
+                  WHERE uid = ?`,
+            args: [
+                first_name ? first_name.trim() : null,
+                last_name ? last_name.trim() : null,
+                bio !== undefined ? (bio ? bio.trim() : null) : null,
+                tagline !== undefined ? (tagline ? tagline.trim() : null) : null,
+                location !== undefined ? (location ? location.trim() : null) : null,
+                profile_photo || null,
+                cover_photo || null,
+                req.user.uid
+            ]
+        });
+
+        // Get updated profile data
+        const updatedRes = await db.execute({
+            sql: `SELECT uid, username, first_name, last_name, created_at, profile_photo, cover_photo, bio, tagline, location, is_verified FROM users WHERE uid = ? LIMIT 1`,
+            args: [req.user.uid]
+        });
+        const updatedUser = updatedRes.rows[0];
+        if (updatedUser) {
+            updatedUser.is_verified = updatedUser.is_verified === 1 || updatedUser.is_verified === true;
+            updatedUser.is_online = true;
+
+            // Broadcast real-time profile update to ALL connected users
+            io.emit('profile_updated', updatedUser);
+            res.json({ success: true, user: updatedUser });
+        } else {
+            res.json({ success: true });
+        }
+    } catch (e) {
+        console.error('[USERS] Update profile error:', e.message);
+        res.status(500).json({ error: 'Failed to update profile: ' + e.message });
+    }
+});
+
+// ─── USERS: UPDATE PROFILE PHOTO (COMPATIBILITY) ─────────────────────────────
 app.post('/api/users/profile-photo', authMiddleware, async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
     const { profile_photo } = req.body;
     
-    // basic validation
     if (profile_photo && profile_photo.length > 5 * 1024 * 1024) {
         return res.status(400).json({ error: 'Image too large' });
     }
@@ -353,7 +439,6 @@ app.post('/api/users/profile-photo', authMiddleware, async (req, res) => {
             args: [profile_photo || null, req.user.uid]
         });
 
-        // Broadcast real-time profile update to ALL connected users
         io.emit('profile_updated', {
             uid: req.user.uid,
             profile_photo: profile_photo || null
