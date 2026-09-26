@@ -95,13 +95,17 @@ const io = new Server(server, {
     pingTimeout:  5000
 });
 
-// Room cleanup: track which socket owns what room
-const roomOwners = new Map(); // callId → Set of socketIds
+// Room cleanup: track which socket owns what room and session
+const roomSessions = new Map(); // callId → Map(sessionId → Set of socketIds)
 
 io.on('connection', (socket) => {
     console.log(`[SOCKET] connect   id=${socket.id}`);
 
-    socket.on('join_call', (callId) => {
+    socket.on('join_call', (data) => {
+        // Fallback for older client that sends just string
+        let callId = typeof data === 'string' ? data : data.callId;
+        let sessionId = typeof data === 'object' ? data.sessionId : 'unknown-' + socket.id;
+        
         if (typeof callId !== 'string' || callId.length > 64) {
             socket.emit('error', { message: 'Invalid call ID' });
             return;
@@ -119,10 +123,13 @@ io.on('connection', (socket) => {
 
         socket.join(callId);
         socket.data.callId = callId;
+        socket.data.sessionId = sessionId;
 
-        // Track socket in room registry
-        if (!roomOwners.has(callId)) roomOwners.set(callId, new Set());
-        roomOwners.get(callId).add(socket.id);
+        // Track socket in session registry
+        if (!roomSessions.has(callId)) roomSessions.set(callId, new Map());
+        const sessions = roomSessions.get(callId);
+        if (!sessions.has(sessionId)) sessions.set(sessionId, new Set());
+        sessions.get(sessionId).add(socket.id);
 
         const isPolite = numClients === 1;
         socket.emit('peer_role', { polite: isPolite });
@@ -143,6 +150,14 @@ io.on('connection', (socket) => {
         if (room) {
             socket.join(data.callId);
             socket.data.callId = data.callId;
+            socket.data.sessionId = data.sessionId;
+            
+            // Track new socket in session registry
+            if (!roomSessions.has(data.callId)) roomSessions.set(data.callId, new Map());
+            const sessions = roomSessions.get(data.callId);
+            if (!sessions.has(data.sessionId)) sessions.set(data.sessionId, new Set());
+            sessions.get(data.sessionId).add(socket.id);
+
             callback({ status: 'resume_ok' });
             socket.to(data.callId).emit('peer_connected');
             console.log(`[ROOM] resumed callId=${data.callId} id=${socket.id}`);
@@ -179,17 +194,36 @@ io.on('connection', (socket) => {
 
     socket.on('disconnecting', () => {
         const callId = socket.data.callId;
-        if (callId) {
-            socket.to(callId).emit('peer_disconnected');
-            console.log(`[SOCKET] disconnect callId=${callId} id=${socket.id}`);
+        const sessionId = socket.data.sessionId;
 
-            // Room cleanup
-            if (roomOwners.has(callId)) {
-                roomOwners.get(callId).delete(socket.id);
-                if (roomOwners.get(callId).size === 0) {
-                    roomOwners.delete(callId);
+        if (callId) {
+            console.log(`[SOCKET] disconnect callId=${callId} id=${socket.id} session=${sessionId}`);
+
+            let sessionHasOtherSockets = false;
+
+            if (roomSessions.has(callId)) {
+                const sessions = roomSessions.get(callId);
+                if (sessions.has(sessionId)) {
+                    sessions.get(sessionId).delete(socket.id);
+                    // Check if this session has any other active sockets (e.g. from reload)
+                    if (sessions.get(sessionId).size > 0) {
+                        sessionHasOtherSockets = true;
+                    } else {
+                        sessions.delete(sessionId);
+                    }
+                }
+                
+                if (sessions.size === 0) {
+                    roomSessions.delete(callId);
                     console.log(`[ROOM] destroyed callId=${callId}`);
                 }
+            }
+
+            // Only notify peers if the entire session disconnected
+            if (!sessionHasOtherSockets) {
+                socket.to(callId).emit('peer_disconnected');
+            } else {
+                console.log(`[ROOM] skipped peer_disconnected for callId=${callId} (session resumed)`);
             }
         }
     });

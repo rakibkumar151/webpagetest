@@ -357,8 +357,7 @@ joinBtn.addEventListener('click', async () => {
             callId: currentCallId,
             sessionId: sessionId
         }));
-        
-        socket.emit('join_call', currentCallId);
+        socket.emit('join_call', { callId: currentCallId, sessionId: sessionId });
         log('Joined call:', currentCallId);
     } catch (e) {
         log('Media error:', e.message);
