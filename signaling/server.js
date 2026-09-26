@@ -98,6 +98,7 @@ if (TURSO_URL && TURSO_TOKEN) {
             try { await db.execute(`ALTER TABLE users ADD COLUMN profile_photo TEXT DEFAULT NULL`); } catch(e) {}
             try { await db.execute(`ALTER TABLE messages ADD COLUMN read_at TEXT DEFAULT NULL`); } catch(e) {}
             try { await db.execute(`ALTER TABLE messages ADD COLUMN reactions TEXT DEFAULT NULL`); } catch(e) {}
+            try { await db.execute(`ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0`); } catch(e) {}
             
             dbReady = true;
             console.log('[DB] Turso connected and tables ready');
@@ -278,7 +279,8 @@ app.get('/api/users', authMiddleware, async (req, res) => {
             last_name: u.last_name,
             last_active: u.last_active || null,
             profile_photo: u.profile_photo || null,
-            is_online: globalUserSockets.has(u.uid)
+            is_online: globalUserSockets.has(u.uid),
+            is_verified: u.is_verified === 1 || u.is_verified === true
         }));
         res.json(users);
     } catch (e) {
@@ -313,6 +315,29 @@ app.post('/api/users/profile-photo', authMiddleware, async (req, res) => {
     } catch (e) {
         console.error('[USERS] Profile photo upload error:', e.message);
         res.status(500).json({ error: 'Failed to update profile photo' });
+    }
+});
+
+// ─── USERS: TOGGLE VERIFIED BADGE (Admin only via ADMIN_SECRET header) ────────
+app.post('/api/users/verify', authMiddleware, async (req, res) => {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const adminSecret = req.headers['x-admin-secret'];
+    if (adminSecret !== process.env.ADMIN_SECRET) {
+        return res.status(403).json({ error: 'Forbidden' });
+    }
+    const { uid, is_verified } = req.body;
+    if (!uid) return res.status(400).json({ error: 'uid required' });
+    try {
+        await db.execute({
+            sql: `UPDATE users SET is_verified = ? WHERE uid = ?`,
+            args: [is_verified ? 1 : 0, uid]
+        });
+        // Broadcast so all clients update instantly
+        io.emit('user_verified', { uid, is_verified: !!is_verified });
+        res.json({ success: true });
+    } catch (e) {
+        console.error('[USERS] Verify error:', e.message);
+        res.status(500).json({ error: 'Failed to update verification' });
     }
 });
 
