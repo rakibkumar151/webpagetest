@@ -484,7 +484,12 @@
     }
     
     function formatTime(isoStr) {
-        const d = new Date(isoStr + 'Z'); // sqlite utc
+        if (!isoStr) return '';
+        let safeIso = isoStr;
+        if (!safeIso.includes('Z') && !safeIso.includes('+')) {
+            safeIso = safeIso.replace(' ', 'T') + 'Z';
+        }
+        const d = new Date(safeIso);
         if (isNaN(d.getTime())) return '';
         let h = d.getHours(), m = d.getMinutes();
         const ampm = h >= 12 ? 'PM' : 'AM';
