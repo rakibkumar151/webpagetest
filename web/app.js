@@ -339,24 +339,53 @@ hangupBtn.addEventListener('click', () => {
 });
 
 // ─── MUTE ─────────────────────────────────────────────────────────────────────
-muteBtn.addEventListener('click', () => {
+muteBtn.addEventListener('click', async () => {
     if (!localStream) return;
-    const track = localStream.getAudioTracks()[0];
-    if (!track) return;
-    isMuted = !isMuted;
-    track.enabled = !isMuted;
-    muteBtn.classList.toggle('active', isMuted);
+    
+    if (!isMuted) {
+        // TRULY STOP HARDWARE MIC
+        const track = localStream.getAudioTracks()[0];
+        if (track) {
+            track.enabled = false;
+            track.stop();
+        }
+        isMuted = true;
+        muteBtn.classList.add('active');
+        muteBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>`;
+    } else {
+        try {
+            const newStream = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                video: false
+            });
+            const newTrack = newStream.getAudioTracks()[0];
+            const oldTrack = localStream.getAudioTracks()[0];
+            
+            if (oldTrack) localStream.removeTrack(oldTrack);
+            localStream.addTrack(newTrack);
+            
+            if (pc) {
+                const sender = pc.getSenders().find(s => s.track && s.track.kind === 'audio');
+                if (sender) {
+                    await sender.replaceTrack(newTrack);
+                } else {
+                    pc.addTrack(newTrack, localStream);
+                }
+            }
+            isMuted = false;
+            muteBtn.classList.remove('active');
+            muteBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>`;
+        } catch (e) {
+            log('Failed to restart mic', e.message);
+            isMuted = true;
+            muteBtn.classList.add('active');
+            showError('Could not access microphone');
+        }
+    }
     
     // Notify peer
     if (currentCallId) {
         socket.emit('peer_action', { callId: currentCallId, action: 'mute_audio', muted: isMuted });
-    }
-    
-    // Update SVG icon color/shape or keep simple active state for now
-    if (isMuted) {
-        muteBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>`;
-    } else {
-        muteBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>`;
     }
 });
 
@@ -529,6 +558,7 @@ screenShareBtn.addEventListener('click', async () => {
             }
             
             if (currentCallId) {
+                socket.emit('peer_action', { callId: currentCallId, action: 'screen_share', active: true });
                 socket.emit('peer_action', { callId: currentCallId, action: 'mute_video', muted: false });
             }
             switchCameraBtn.disabled = true; // Can't switch camera while sharing screen
@@ -556,6 +586,7 @@ function stopScreenSharing() {
     localVideo.srcObject = localStream; // Back to localStream (which has no video track right now)
     
     if (currentCallId) {
+        socket.emit('peer_action', { callId: currentCallId, action: 'screen_share', active: false });
         socket.emit('peer_action', { callId: currentCallId, action: 'mute_video', muted: true });
     }
 }
@@ -805,6 +836,12 @@ socket.on('peer_action', (data) => {
         if (remoteVideoStatus) {
             if (data.muted) remoteVideoStatus.classList.remove('hidden');
             else remoteVideoStatus.classList.add('hidden');
+        }
+    } else if (data.action === 'screen_share') {
+        if (data.active) {
+            remoteVideo.classList.add('is-screen-share');
+        } else {
+            remoteVideo.classList.remove('is-screen-share');
         }
     }
 });

@@ -134,6 +134,11 @@ input[type="text"]:focus { border-color: var(--primary); }
     z-index: 1;
     transform: translateZ(0); /* Force GPU Acceleration */
     will-change: transform;
+    background: #000;
+}
+
+#remoteVideo.is-screen-share {
+    object-fit: contain;
 }
 
 .local-video-container {
