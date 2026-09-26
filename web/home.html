@@ -130,6 +130,7 @@
             display: flex; align-items: center; justify-content: center;
             font-weight: 700; font-size: 14px; color: #fff;
             flex-shrink: 0;
+            overflow: hidden;
         }
         .nav-name { font-weight: 600; font-size: 14px; }
 
@@ -182,7 +183,21 @@
             font-size: 28px; font-weight: 800; color: #fff;
             flex-shrink: 0;
             box-shadow: 0 8px 24px rgba(124,108,255,0.35);
+            position: relative;
+            cursor: pointer;
+            overflow: hidden;
+            transition: all 0.2s;
         }
+        .profile-avatar:hover .avatar-overlay { opacity: 1; }
+        .avatar-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            opacity: 0; transition: opacity 0.2s;
+            font-size: 10px; font-weight: 600; text-align: center; line-height: 1.2;
+            color: #fff;
+        }
+        .profile-avatar img { width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; }
         .profile-info { flex: 1; min-width: 0; }
         .profile-name { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
         .profile-username { font-size: 14px; color: var(--muted); margin-bottom: 8px; }
@@ -411,7 +426,14 @@
 <main>
     <!-- Profile Card -->
     <div class="profile-card" id="profileCard" style="display:none">
-        <div class="profile-avatar" id="profileAvatar">?</div>
+        <input type="file" id="profilePicInput" accept="image/*" style="display:none" onchange="uploadProfilePic(event)">
+        <div class="profile-avatar" id="profileAvatar" onclick="document.getElementById('profilePicInput').click()" title="Add your profile photo">
+            <span id="profileAvatarText">?</span>
+            <div class="avatar-overlay">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                <span style="margin-top:2px">Upload</span>
+            </div>
+        </div>
         <div class="profile-info">
             <div class="profile-name" id="profileName">Loading...</div>
             <div class="profile-username" id="profileUsername">@username</div>
@@ -479,9 +501,27 @@ function getColor(uid) {
 function initProfile() {
     if (!me.uid) { logout(); return; }
     const init = initials(me);
-    document.getElementById('navAvatar').textContent = init;
+    
+    // Check local storage for avatar
+    const savedAvatar = localStorage.getItem('chet_avatar_' + me.uid);
+    if (savedAvatar) {
+        document.getElementById('navAvatar').innerHTML = `<img src="${savedAvatar}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+        document.getElementById('profileAvatarText').style.display = 'none';
+        
+        // Remove existing img if any, and add the saved one
+        let existingImg = document.getElementById('profileAvatarImg');
+        if (!existingImg) {
+            existingImg = document.createElement('img');
+            existingImg.id = 'profileAvatarImg';
+            document.getElementById('profileAvatar').appendChild(existingImg);
+        }
+        existingImg.src = savedAvatar;
+    } else {
+        document.getElementById('navAvatar').textContent = init;
+        document.getElementById('profileAvatarText').textContent = init;
+    }
+    
     document.getElementById('navName').textContent = me.first_name || me.username;
-    document.getElementById('profileAvatar').textContent = init;
     document.getElementById('profileAvatar').style.background = getColor(me.uid);
     document.getElementById('profileName').textContent = (me.first_name || '') + ' ' + (me.last_name || '');
     document.getElementById('profileUsername').textContent = '@' + me.username;
@@ -496,6 +536,47 @@ function copyUID() {
         showToast('UID copied!');
         setTimeout(() => badge.classList.remove('copied'), 2000);
     });
+}
+
+function uploadProfilePic(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+        const img = new Image();
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            const MAX_SIZE = 250;
+            let width = img.width;
+            let height = img.height;
+            
+            if (width > height) {
+                if (width > MAX_SIZE) {
+                    height *= MAX_SIZE / width;
+                    width = MAX_SIZE;
+                }
+            } else {
+                if (height > MAX_SIZE) {
+                    width *= MAX_SIZE / height;
+                    height = MAX_SIZE;
+                }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Compress and get base64
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            localStorage.setItem('chet_avatar_' + me.uid, dataUrl);
+            initProfile(); // re-render
+            showToast('Profile photo updated!');
+        };
+        img.src = evt.target.result;
+    };
+    reader.readAsDataURL(file);
 }
 
 function getCallId(uidA, uidB) {
