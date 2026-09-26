@@ -1128,6 +1128,8 @@
             if (!r.ok) { alert('Failed to start call. Try again.'); return; }
             const data = await r.json();
 
+            const currentMe = JSON.parse(localStorage.getItem('chet_user') || '{}');
+            
             sessionStorage.setItem('activeCall', JSON.stringify({
                 callId: data.callId,
                 sessionId: data.sessionId,
@@ -1143,7 +1145,7 @@
                 to_uid: partner.uid,
                 callId: data.callId,
                 isVideo: isVideo,
-                caller: { first_name: me.first_name, last_name: me.last_name, uid: me.uid, profile_photo: me.profile_photo }
+                caller: { first_name: currentMe.first_name, last_name: currentMe.last_name, uid: currentMe.uid, profile_photo: currentMe.profile_photo }
             }));
 
             // Signal the callee — wait for emit ack before navigating
@@ -1154,7 +1156,7 @@
             if (socket && socket.connected) {
                 socket.emit('incoming_call', {
                     to_uid: partner.uid,
-                    caller: { first_name: me.first_name, last_name: me.last_name, uid: me.uid, profile_photo: me.profile_photo },
+                    caller: { first_name: currentMe.first_name, last_name: currentMe.last_name, uid: currentMe.uid, profile_photo: currentMe.profile_photo },
                     callId: data.callId,
                     isVideo: isVideo
                 }, () => doNavigate()); // use ack callback to navigate only after server confirms
