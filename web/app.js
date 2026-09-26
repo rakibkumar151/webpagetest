@@ -182,7 +182,9 @@ function showCallingOverlay() {
                 document.getElementById('callingAvatar').textContent = initials.toUpperCase();
                 document.getElementById('callingAvatar').style.background = 'linear-gradient(135deg,#7c6cff,#a855f7)';
             }
-            document.getElementById('callingName').textContent = (p.first_name||'') + ' ' + (p.last_name||'');
+            const safeName = ((p.first_name||'') + ' ' + (p.last_name||'')).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+            const badgeHtml = p.is_verified ? `<span class="verified-badge" style="margin-left:4px" title=""><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="#1d9bf0"/><path d="M9.5 16.5l-3-3 1.4-1.4 1.6 1.6 5.6-5.6 1.4 1.4z" fill="#fff"/></svg><span class="badge-tooltip">Verified Account</span></span>` : '';
+            document.getElementById('callingName').innerHTML = `<div style="display:flex;align-items:center;justify-content:center;">${safeName}${badgeHtml}</div>`;
             document.getElementById('callingType').textContent = callData.isVideoMuted ? '📞 Voice Call' : '📹 Video Call';
             callingOverlay.style.display = 'flex';
             return;
