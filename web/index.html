@@ -38,13 +38,24 @@
     </script>
 </head>
 <body data-state="IDLE">
+    <!-- INSTANT SCREEN GUARD: runs before any external script loads -->
+    <script>
+    (function(){
+        var hasActive = !!sessionStorage.getItem('activeCall');
+        var hasCallId = !!(new URLSearchParams(window.location.search).get('callId'));
+        if (hasActive || hasCallId) {
+            // Will be on call screen — hide join screen before paint
+            document.write('<style>#joinScreen{display:none!important}#callScreen{display:block!important}</style>');
+        }
+    })();
+    </script>
     <div class="app-container">
         <main class="main-content">
             <!-- Error Notification -->
             <div id="errorNotification" class="error-notification hidden" role="alert"></div>
 
-            <!-- Join Screen -->
-            <div id="joinScreen" class="screen active">
+            <!-- Join Screen (hidden when coming from home page or during active call) -->
+            <div id="joinScreen" class="screen">
                 <div class="card">
                     <div class="card-icon">🔐</div>
                     <h2>Join a Voice Call</h2>
