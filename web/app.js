@@ -835,6 +835,11 @@ function setupWebRTC() {
 // ─── SOCKET EVENTS ────────────────────────────────────────────────────────────
 socket.on('connect', () => {
     log('Signaling connected id=' + socket.id);
+
+    // Always register with the server so we can receive chat signals even on index.html
+    const _tok = localStorage.getItem('chet_token') || sessionStorage.getItem('chet_token');
+    if (_tok) socket.emit('register_user', _tok);
+
     // Only auto-resume if we are actively in a call (not handled by window.load already)
     if (['IDLE', 'ENDED', 'FAILED'].includes(appState) || manualHangup || !currentCallId) return;
     // Don't fire if we are already handling a window.load resume (pc could be null during setup)
@@ -856,6 +861,32 @@ socket.on('connect', () => {
         });
     }
 });
+
+// ─── CALL REJECTED BY CALLEE ──────────────────────────────────────────────────
+socket.on('call_rejected', () => {
+    log('[CALL] Call was rejected by callee');
+    // Save a pending call log for chat.html to render when we go back
+    sessionStorage.setItem('pendingCallLog', JSON.stringify({ status: 'rejected', duration: 0 }));
+    sessionStorage.removeItem('activeCall');
+    manualHangup = true; // Don't save duplicate log in cleanupCall
+    if (pc) { pc.close(); pc = null; }
+    if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+    stopTimer();
+    window.location.replace('chat.html');
+});
+
+// ─── CALL MISSED (no answer) ───────────────────────────────────────────────────
+socket.on('call_missed', () => {
+    log('[CALL] Call timed out — no answer');
+    sessionStorage.setItem('pendingCallLog', JSON.stringify({ status: 'missed', duration: 0 }));
+    sessionStorage.removeItem('activeCall');
+    manualHangup = true;
+    if (pc) { pc.close(); pc = null; }
+    if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+    stopTimer();
+    window.location.replace('chat.html');
+});
+
 
 socket.on('disconnect', (reason) => {
     log('Signaling disconnected:', reason);

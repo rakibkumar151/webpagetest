@@ -1014,24 +1014,9 @@
                 }
             });
 
-            // ── Caller: partner rejected ──
-            socket.on('call_rejected', (data) => {
-                clearTimeout(window._callAutoCancel);
-                sessionStorage.removeItem('activeCall');
-                // Append a rejected call log
-                const fakeMsg = {
-                    id: Date.now(),
-                    from_uid: me.uid,
-                    to_uid: partner.uid,
-                    text: JSON.stringify({ type: 'call_log', status: 'rejected', duration: 0 }),
-                    created_at: new Date().toISOString()
-                };
-                appendMessage(fakeMsg);
-            });
-
-            // ── Caller: no one answered (timeout on callee side) ──
-            socket.on('call_missed', (data) => {
-                dismissIncomingCall(true);
+            // ── call_missed: callee's overlay auto-dismiss when caller timed out ──
+            socket.on('call_missed', () => {
+                dismissIncomingCall();
             });
         };
         document.body.appendChild(s);
@@ -1039,6 +1024,22 @@
     
     loadHistory().then(() => {
         initSocket();
+        // Check for a pending call log that was saved by app.js before returning here
+        try {
+            const pendingLog = sessionStorage.getItem('pendingCallLog');
+            if (pendingLog) {
+                sessionStorage.removeItem('pendingCallLog');
+                const logData = JSON.parse(pendingLog);
+                const fakeMsg = {
+                    id: Date.now(),
+                    from_uid: me.uid,
+                    to_uid: partner.uid,
+                    text: JSON.stringify({ type: 'call_log', ...logData }),
+                    created_at: new Date().toISOString()
+                };
+                appendMessage(fakeMsg);
+            }
+        } catch(e) {}
     });
 </script>
 </body>
