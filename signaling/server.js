@@ -828,6 +828,8 @@ io.on('connection', (socket) => {
     socket.on('error', (err) => console.error(`[SOCKET] error id=${socket.id}`, err.message));
 });
 
+// ─── STATIC FRONTEND ─────────────────────────────────────────────────────────
+const path = require('path');
 app.use(express.static(path.join(__dirname, '..', 'web'), {
     setHeaders: (res, pathStr) => {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
