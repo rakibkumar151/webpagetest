@@ -532,11 +532,9 @@ videoBtn.addEventListener('click', async () => {
         try {
             const newStream = await navigator.mediaDevices.getUserMedia({
                 audio: false,
-                video: { 
+                video: {
                     facingMode: currentFacingMode,
-                    width: { ideal: 640 },
-                    height: { ideal: 480 },
-                    frameRate: { ideal: 24 }
+                    ...window.currentVideoConstraints
                 }
             });
             const newTrack = newStream.getVideoTracks()[0];
@@ -592,11 +590,9 @@ switchCameraBtn.addEventListener('click', async () => {
     try {
         const newStream = await navigator.mediaDevices.getUserMedia({
             audio: false,
-            video: { 
+            video: {
                 facingMode: currentFacingMode,
-                width: { ideal: 640 },
-                height: { ideal: 480 },
-                frameRate: { ideal: 24 }
+                ...window.currentVideoConstraints
             }
         });
         
@@ -635,7 +631,10 @@ screenShareBtn.addEventListener('click', async () => {
         stopScreenSharing();
     } else {
         try {
-            screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+            screenStream = await navigator.mediaDevices.getDisplayMedia({
+                video: window.currentVideoConstraints || true,
+                audio: false
+            });
             const screenTrack = screenStream.getVideoTracks()[0];
             
             // Listen for native "Stop sharing" button
@@ -1288,3 +1287,99 @@ window.addEventListener('load', async () => {
         window.location.replace('home.html');
     }
 });
+
+// ─── QUALITY CONTROLS ─────────────────────────────────────────────────────────
+const qualityConfigs = {
+    '144':  { width: { ideal: 256 },  height: { ideal: 144 },  frameRate: { ideal: 15 } },
+    '360':  { width: { ideal: 640 },  height: { ideal: 360 },  frameRate: { ideal: 24 } },
+    '480':  { width: { ideal: 854 },  height: { ideal: 480 },  frameRate: { ideal: 24 } },
+    '720':  { width: { ideal: 1280 }, height: { ideal: 720 },  frameRate: { ideal: 30 } },
+    '1080': { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
+    '2160': { width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 60 } }
+};
+
+window.currentVideoConstraints = qualityConfigs['480'];
+
+const qualityBtn = document.getElementById('qualityBtn');
+const qualityMenu = document.getElementById('qualityMenu');
+const qualityIndicator = document.getElementById('qualityIndicator');
+const qualityText = document.getElementById('qualityText');
+
+if (qualityBtn && qualityMenu) {
+    qualityBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        qualityMenu.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!qualityBtn.contains(e.target) && !qualityMenu.contains(e.target)) {
+            qualityMenu.classList.add('hidden');
+        }
+    });
+
+    qualityMenu.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            qualityMenu.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            qualityMenu.classList.add('hidden');
+            
+            const q = btn.getAttribute('data-quality');
+            window.currentVideoConstraints = qualityConfigs[q];
+            
+            log('Quality changed to: ' + q + 'p');
+
+            let trackToUpdate = null;
+            if (isScreenSharing && screenStream) {
+                trackToUpdate = screenStream.getVideoTracks()[0];
+            } else if (localStream && !isVideoMuted) {
+                trackToUpdate = localStream.getVideoTracks()[0];
+            }
+            
+            if (trackToUpdate) {
+                try {
+                    await trackToUpdate.applyConstraints({
+                        ...window.currentVideoConstraints,
+                        facingMode: !isScreenSharing ? window.currentFacingMode : undefined
+                    });
+                    log('Applied new constraints successfully');
+                } catch(err) {
+                    log('Failed to apply constraints: ' + err.message);
+                }
+            }
+        });
+    });
+}
+
+setInterval(async () => {
+    if (!pc) return;
+    try {
+        const stats = await pc.getStats();
+        let resText = 'Audio Only';
+        let foundVideo = false;
+
+        stats.forEach(report => {
+            if (report.type === 'inbound-rtp' && report.kind === 'video') {
+                foundVideo = true;
+                if (report.frameWidth && report.frameHeight) {
+                    resText = `Receive: ${report.frameWidth}x${report.frameHeight} @ ${report.framesPerSecond || 0}fps`;
+                }
+            }
+        });
+
+        if (!foundVideo) {
+            stats.forEach(report => {
+                if (report.type === 'outbound-rtp' && report.kind === 'video') {
+                    foundVideo = true;
+                    if (report.frameWidth && report.frameHeight) {
+                        resText = `Send: ${report.frameWidth}x${report.frameHeight} @ ${report.framesPerSecond || 0}fps`;
+                    }
+                }
+            });
+        }
+        
+        if (qualityIndicator) {
+            qualityIndicator.classList.remove('hidden');
+            qualityText.textContent = resText;
+        }
+    } catch(e) {}
+}, 2000);

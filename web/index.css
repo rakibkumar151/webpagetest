@@ -421,3 +421,13 @@ body:has(#callScreen.active) {
 .verified-badge:hover .badge-tooltip {
     opacity: 1; transform: translateX(-50%) scale(1);
 }
+
+
+/* Quality Dropdown Menu */
+.quality-dropdown-container { position: relative; display: inline-flex; align-items: center; justify-content: center; }
+.quality-menu { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 4px; z-index: 1000; min-width: 140px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+.quality-menu.hidden { display: none !important; }
+.quality-menu button { background: none; border: none; color: var(--text-primary); padding: 10px 16px; border-radius: 8px; font-size: 14px; cursor: pointer; text-align: left; transition: background 0.2s; }
+.quality-menu button:hover { background: var(--border); }
+.quality-menu button.active { background: var(--primary); font-weight: bold; }
+
