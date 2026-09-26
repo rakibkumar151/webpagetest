@@ -649,14 +649,14 @@ function renderUsers(users) {
     }
 
     list.innerHTML = users.map((u, i) => `
-        <div class="user-card" style="animation-delay:${i * 0.04}s" onclick="startCall(${JSON.stringify(u).replace(/"/g, '&quot;')})">
+        <div class="user-card" data-uid="${esc(u.uid)}" style="animation-delay:${i * 0.04}s" onclick="startCall(${JSON.stringify(u).replace(/"/g, '&quot;')})">
             <div class="avatar" style="background:${getColor(u.uid)}">
                 ${u.profile_photo ? `<img src="${u.profile_photo}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;position:absolute;top:0;left:0;">` : initials(u)}
-                <div style="position:absolute; bottom:0; right:0; width:12px; height:12px; border-radius:50%; border:2px solid var(--surface); background:${u.is_online ? '#10b981' : '#6b7280'}"></div>
+                <div style="position:absolute; bottom:0; right:0; width:12px; height:12px; border-radius:50%; border:2px solid var(--surface); background:${u.is_online ? '#10b981' : '#6b7280'}" class="status-dot"></div>
             </div>
             <div class="user-card-info">
                 <div class="user-card-name">${esc(u.first_name)} ${esc(u.last_name)}</div>
-                <div class="user-card-sub">@${esc(u.username)} • ${u.is_online ? '<span style="color:#10b981">Active now</span>' : esc(formatLastActive(u.last_active))}</div>
+                <div class="user-card-sub" data-status-uid="${esc(u.uid)}">@${esc(u.username)} • ${u.is_online ? '<span style="color:#10b981">Active now</span>' : esc(formatLastActive(u.last_active))}</div>
                 <div class="user-card-uid">${esc(u.uid)}</div>
             </div>
             <div class="user-card-actions">
@@ -697,6 +697,17 @@ function formatLastActive(isoString) {
     if (mo < 12) return `Active ${mo}mo ago`;
     return `Active ${Math.floor(mo / 12)}y ago`;
 }
+
+// ── Live status ticker: updates "Active Xs ago" every 30s without re-render ──
+setInterval(() => {
+    document.querySelectorAll('[data-status-uid]').forEach(el => {
+        const uid = el.getAttribute('data-status-uid');
+        const user = allUsers.find(u => u.uid === uid);
+        if (!user || user.is_online) return;
+        const username = esc(user.username);
+        el.innerHTML = `@${username} &bull; ${esc(formatLastActive(user.last_active))}`;
+    });
+}, 30000);
 
 async function loadUsers(q = '') {
     const list = document.getElementById('userList');
@@ -740,18 +751,21 @@ loadUsers().then(() => {
             if (user) {
                 user.is_online = data.is_online;
                 user.last_active = data.last_active;
-                const q = document.getElementById('searchInput').value.trim();
-                if (!q) {
-                    renderUsers(allUsers);
-                } else {
-                    const lq = q.toLowerCase();
-                    const filtered = allUsers.filter(u =>
-                        (u.username||'').toLowerCase().includes(lq) ||
-                        (u.first_name||'').toLowerCase().includes(lq) ||
-                        (u.last_name||'').toLowerCase().includes(lq) ||
-                        (u.uid||'').toLowerCase().includes(lq)
-                    );
-                    renderUsers(filtered);
+                
+                // Surgically update the card without full re-render
+                const statusEl = document.querySelector(`[data-status-uid="${data.uid}"]`);
+                const dotEl = document.querySelector(`[data-uid="${data.uid}"] .status-dot`);
+                
+                if (statusEl) {
+                    const username = esc(user.username);
+                    if (data.is_online) {
+                        statusEl.innerHTML = `@${username} &bull; <span style="color:#10b981">Active now</span>`;
+                    } else {
+                        statusEl.innerHTML = `@${username} &bull; ${esc(formatLastActive(data.last_active))}`;
+                    }
+                }
+                if (dotEl) {
+                    dotEl.style.background = data.is_online ? '#10b981' : '#6b7280';
                 }
             }
         });
