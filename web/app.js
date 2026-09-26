@@ -1302,8 +1302,7 @@ window.currentVideoConstraints = qualityConfigs['480'];
 
 const qualityBtn = document.getElementById('qualityBtn');
 const qualityMenu = document.getElementById('qualityMenu');
-const qualityIndicator = document.getElementById('qualityIndicator');
-const qualityText = document.getElementById('qualityText');
+// qualityIndicator and qualityText already declared above
 
 if (qualityBtn && qualityMenu) {
     qualityBtn.addEventListener('click', (e) => {
