@@ -805,12 +805,11 @@ socket.on('peer_role', ({ polite: isPolite }) => {
 
 socket.on('peer_connected', () => {
     log('Peer connected — starting WebRTC');
-    changeAppState('CONNECTING', 'Peer connected...');
-    if (pc) {
-        log('Peer reconnected. Rebuilding WebRTC...');
-        rebuildConnection();
-    } else {
+    if (!pc) {
+        changeAppState('CONNECTING', 'Peer connected...');
         setupWebRTC();
+    } else {
+        log('Peer reconnected (socket only). Waiting for rebuild_webrtc if they reloaded.');
     }
 });
 
