@@ -281,19 +281,33 @@
         
         /* Reactions */
         .reactions-bar {
-            position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%) translateY(10px);
+            position: absolute; bottom: 100%;
             background: var(--nav); border: 1px solid var(--border); border-radius: 30px;
-            padding: 4px 8px; display: flex; gap: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            z-index: 100; opacity: 0; pointer-events: none; transition: all 0.2s;
+            padding: 6px 12px; display: flex; gap: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+            z-index: 100; opacity: 0; pointer-events: none;
+            transition: opacity 0.25s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
+        
+        /* Bridge the gap so hover doesn't break when moving mouse up */
+        .reactions-bar::after {
+            content: ''; position: absolute; top: 100%; left: 0; right: 0; height: 15px; background: transparent;
+        }
+
+        .msg-row.sent .reactions-bar { right: 0; transform-origin: bottom right; transform: translateY(15px) scale(0.85); }
+        .msg-row.recv .reactions-bar { left: 0; transform-origin: bottom left; transform: translateY(15px) scale(0.85); }
+
         .msg-content-wrapper { position: relative; }
-        .msg-content-wrapper:hover .reactions-bar, .reactions-bar.active {
-            opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(-5px);
+        
+        .msg-row.sent .msg-content-wrapper:hover .reactions-bar, .msg-row.sent .reactions-bar.active {
+            opacity: 1; pointer-events: auto; transform: translateY(-5px) scale(1);
+        }
+        .msg-row.recv .msg-content-wrapper:hover .reactions-bar, .msg-row.recv .reactions-bar.active {
+            opacity: 1; pointer-events: auto; transform: translateY(-5px) scale(1);
         }
         .reaction-btn {
-            background: none; border: none; font-size: 20px; cursor: pointer; transition: transform 0.1s; padding: 2px;
+            background: none; border: none; font-size: 24px; cursor: pointer; transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); padding: 4px;
         }
-        .reaction-btn:hover { transform: scale(1.3); }
+        .reaction-btn:hover { transform: scale(1.4) translateY(-3px); }
         .msg-reactions {
             position: absolute; bottom: -12px; right: 0;
             background: var(--nav); border: 1px solid var(--border); border-radius: 12px;
@@ -1258,8 +1272,14 @@
     });
     
     sendBtn.addEventListener('click', sendTextMessage);
-
     
+    // Hide active reactions on outside click
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.msg-content-wrapper')) {
+            document.querySelectorAll('.reactions-bar.active').forEach(b => b.classList.remove('active'));
+        }
+    });
+
     // --- SOCKET.IO FOR REALTIME ---
     function initSocket() {
         var s = document.createElement('script');
