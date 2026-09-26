@@ -706,28 +706,40 @@ function cleanupCall(isManual = false) {
         changeAppState('IDLE', 'Ready');
     }
 
-    if (currentCallId) {
+    // ── Save call log (both caller AND callee save their own copy) ────────────────
+    if (currentCallId && !manualHangup_logSaved) {
+        manualHangup_logSaved = true;
         try {
             const savedCallData = JSON.parse(sessionStorage.getItem('activeCall') || '{}');
-            const isCaller = savedCallData.isCaller === true;
             const pStr = sessionStorage.getItem('callPartner');
             const token = localStorage.getItem('chet_token') || sessionStorage.getItem('chet_token');
-            if (isCaller && pStr && token) {
+            if (pStr && token) {
                 const p = JSON.parse(pStr);
                 const API = window.APP_CONFIG?.SIGNALING_URL || window.location.origin;
                 const status = secondsConnected > 0 ? 'ended' : 'missed';
-                fetch(`${API}/api/messages`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                    body: JSON.stringify({
-                        to_uid: p.uid,
-                        text: JSON.stringify({
-                            type: 'call_log',
-                            status: status,
-                            duration: secondsConnected
+                const isCaller = savedCallData.isCaller === true;
+                // Only the caller saves to DB to avoid duplicate messages
+                // But store locally for callee too via pendingCallLog
+                if (isCaller) {
+                    fetch(`${API}/api/messages`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        body: JSON.stringify({
+                            to_uid: p.uid,
+                            text: JSON.stringify({
+                                type: 'call_log',
+                                status: status,
+                                duration: secondsConnected
+                            })
                         })
-                    })
-                }).catch(()=>{});
+                    }).catch(()=>{});
+                } else {
+                    // Callee: store locally to show in chat on return
+                    sessionStorage.setItem('pendingCallLog', JSON.stringify({
+                        status: status,
+                        duration: secondsConnected
+                    }));
+                }
             }
         } catch(e) {}
     }
@@ -786,10 +798,21 @@ function cleanupCall(isManual = false) {
 
     sessionStorage.removeItem('activeCall');
 
-    // Go back to home — never show join screen again
-    setTimeout(() => { window.location.replace('home.html'); }, isManual ? 1000 : 2000);
+    // Redirect back to chat with partner so the call log is visible immediately
+    const delay = isManual ? 800 : 1500;
+    setTimeout(() => {
+        try {
+            const partner = JSON.parse(sessionStorage.getItem('callPartner') || 'null');
+            if (partner && partner.uid) {
+                window.location.replace('chat.html?' + new URLSearchParams({ partner: JSON.stringify(partner) }));
+                return;
+            }
+        } catch(e) {}
+        window.location.replace('home.html');
+    }, delay);
 }
 
+let manualHangup_logSaved = false; // reset each new call
 
 // ─── REBUILD ──────────────────────────────────────────────────────────────────
 function rebuildConnection() {
@@ -1073,6 +1096,7 @@ window.addEventListener('load', async () => {
         currentCallId    = data.callId;
         sessionId        = data.sessionId;
         manualHangup     = false;
+        manualHangup_logSaved = false; // reset so log is saved when this call ends
         secondsConnected = data.secondsConnected || 0;
         isVideoMuted     = data.isVideoMuted !== false;
         isMuted          = data.isMuted || false;
