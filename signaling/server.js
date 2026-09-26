@@ -90,6 +90,9 @@ if (TURSO_URL && TURSO_TOKEN) {
                     created_at     TEXT DEFAULT (datetime('now'))
                 )
             `);
+            // Add columns safely
+            await db.execute(`ALTER TABLE users ADD COLUMN last_active TEXT DEFAULT NULL`).catch(()=> {});
+            await db.execute(`ALTER TABLE messages ADD COLUMN read_at TEXT DEFAULT NULL`).catch(()=> {});
             dbReady = true;
             console.log('[DB] Turso connected and tables ready');
         } catch (e) {
@@ -250,19 +253,23 @@ app.get('/api/users', authMiddleware, async (req, res) => {
         let result;
         if (q) {
             result = await db.execute({
-                sql: `SELECT uid, username, first_name, last_name FROM users
+                sql: `SELECT uid, username, first_name, last_name, last_active FROM users
                       WHERE (username LIKE ? OR first_name LIKE ? OR last_name LIKE ? OR uid LIKE ?)
                       AND uid != ? LIMIT 40`,
                 args: [`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, req.user.uid]
             });
         } else {
             result = await db.execute({
-                sql: `SELECT uid, username, first_name, last_name FROM users
+                sql: `SELECT uid, username, first_name, last_name, last_active FROM users
                       WHERE uid != ? ORDER BY created_at DESC LIMIT 40`,
                 args: [req.user.uid]
             });
         }
-        res.json(result.rows);
+        const users = result.rows.map(u => ({
+            ...u,
+            is_online: globalUserSockets.has(u.uid)
+        }));
+        res.json(users);
     } catch (e) {
         console.error('[USERS] List error:', e.message);
         res.status(500).json({ error: 'Failed to load users' });
@@ -308,7 +315,7 @@ app.get('/api/messages/:uid', authMiddleware, async (req, res) => {
     const myUid = req.user.uid;
     try {
         const result = await db.execute({
-            sql: `SELECT id, from_uid, to_uid, encrypted_text, created_at FROM messages 
+            sql: `SELECT id, from_uid, to_uid, encrypted_text, created_at, read_at FROM messages 
                   WHERE (from_uid = ? AND to_uid = ?) OR (from_uid = ? AND to_uid = ?)
                   ORDER BY created_at ASC LIMIT 100`,
             args: [myUid, otherUid, otherUid, myUid]
@@ -320,7 +327,8 @@ app.get('/api/messages/:uid', authMiddleware, async (req, res) => {
             from_uid: row.from_uid,
             to_uid: row.to_uid,
             text: decryptMessage(row.encrypted_text),
-            created_at: row.created_at
+            created_at: row.created_at,
+            read_at: row.read_at
         }));
         
         res.json(messages);
@@ -386,16 +394,40 @@ const globalUserSockets = new Map(); // Map<uid, Set<socketId>>
 io.on('connection', (socket) => {
     console.log(`[SOCKET] connect   id=${socket.id}`);
 
-    // Auth for real-time chat push
     socket.on('register_user', (token) => {
         try {
             const user = jwt.verify(token, JWT_SECRET);
             socket.data.uid = user.uid;
-            if (!globalUserSockets.has(user.uid)) globalUserSockets.set(user.uid, new Set());
+            if (!globalUserSockets.has(user.uid)) {
+                globalUserSockets.set(user.uid, new Set());
+                if (db) {
+                    db.execute({ sql: `UPDATE users SET last_active = datetime('now') WHERE uid = ?`, args: [user.uid] }).catch(()=>{});
+                }
+                io.emit('user_status', { uid: user.uid, is_online: true, last_active: new Date().toISOString() });
+            }
             globalUserSockets.get(user.uid).add(socket.id);
             console.log(`[SOCKET] Registered user ${user.uid} on socket ${socket.id}`);
         } catch(e) {
             console.error('[SOCKET] register_user failed: Invalid token');
+        }
+    });
+
+    socket.on('mark_seen', (data) => {
+        // data: { message_id, to_uid }
+        if (!socket.data.uid || !data.message_id || !data.to_uid) return;
+        if (db) {
+            db.execute({
+                sql: `UPDATE messages SET read_at = datetime('now') WHERE id = ? AND to_uid = ?`,
+                args: [data.message_id, socket.data.uid]
+            }).catch(()=>{});
+        }
+        
+        // Notify the sender that this message was seen
+        if (globalUserSockets.has(data.to_uid)) {
+            const socketIds = globalUserSockets.get(data.to_uid);
+            for (let sId of socketIds) {
+                io.to(sId).emit('message_seen', { message_id: data.message_id, by_uid: socket.data.uid });
+            }
         }
     });
 
@@ -471,7 +503,13 @@ io.on('connection', (socket) => {
             const sSet = globalUserSockets.get(socket.data.uid);
             if (sSet) {
                 sSet.delete(socket.id);
-                if (sSet.size === 0) globalUserSockets.delete(socket.data.uid);
+                if (sSet.size === 0) {
+                    globalUserSockets.delete(socket.data.uid);
+                    if (db) {
+                        db.execute({ sql: `UPDATE users SET last_active = datetime('now') WHERE uid = ?`, args: [socket.data.uid] }).catch(()=>{});
+                    }
+                    io.emit('user_status', { uid: socket.data.uid, is_online: false, last_active: new Date().toISOString() });
+                }
             }
         }
 

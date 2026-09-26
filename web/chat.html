@@ -71,7 +71,10 @@
             display: flex; align-items: center; justify-content: center;
             font-weight: 700; font-size: 14px;
         }
+        .chat-name-container { display: flex; flex-direction: column; }
         .chat-name { font-weight: 600; font-size: 15px; }
+        .chat-status { font-size: 11px; color: var(--muted); margin-top: 2px; }
+        .chat-status.online { color: #10b981; }
 
         .chat-header-actions {
             display: flex; align-items: center; gap: 16px;
@@ -166,6 +169,16 @@
             text-align: right;
         }
         .msg-row.recv .msg-time { text-align: left; }
+        
+        .seen-container {
+            width: 100%; display: flex; justify-content: flex-end; padding-right: 4px; margin-top: 2px;
+        }
+        .seen-indicator {
+            width: 14px; height: 14px; border-radius: 50%;
+            background: var(--surface); display: flex; align-items: center; justify-content: center;
+            font-size: 8px; font-weight: bold; color: var(--text);
+            border: 1px solid var(--border);
+        }
 
         /* Input Area */
         .chat-input-area {
@@ -259,7 +272,10 @@
     </button>
     <div class="chat-header-user">
         <div class="chat-avatar" id="chatAvatar">?</div>
-        <div class="chat-name" id="chatPartnerName">Loading...</div>
+        <div class="chat-name-container">
+            <div class="chat-name" id="chatPartnerName">Loading...</div>
+            <div class="chat-status" id="chatPartnerStatus"></div>
+        </div>
     </div>
     <div class="chat-header-actions">
         <!-- Voice Call -->
@@ -330,6 +346,44 @@
     const initials = (partner.first_name?.[0] || '') + (partner.last_name?.[0] || '');
     document.getElementById('chatAvatar').textContent = initials || '?';
     
+    function formatLastActive(isoString) {
+        if (!isoString) return 'Active a long time ago';
+        const d = new Date(isoString);
+        if (isNaN(d.getTime())) {
+            // It might be a sqlite UTC string, try appending Z
+            const d2 = new Date(isoString + 'Z');
+            if (isNaN(d2.getTime())) return 'Active a long time ago';
+            else isoString = isoString + 'Z';
+        }
+        
+        const diff = Math.floor((new Date() - new Date(isoString)) / 1000);
+        if (diff < 60) return `Active ${Math.max(1, diff)}s ago`;
+        const m = Math.floor(diff / 60);
+        if (m < 60) return `Active ${m}m ago`;
+        const h = Math.floor(m / 60);
+        if (h < 24) return `Active ${h}h ago`;
+        const days = Math.floor(h / 24);
+        if (days < 30) return `Active ${days}d ago`;
+        const mo = Math.floor(days / 30);
+        if (mo < 12) return `Active ${mo}mo ago`;
+        return `Active ${Math.floor(mo / 12)}y ago`;
+    }
+
+    function updateChatStatus(isOnline, lastActive) {
+        const el = document.getElementById('chatPartnerStatus');
+        if (!el) return;
+        if (isOnline) {
+            el.textContent = 'Active now';
+            el.className = 'chat-status online';
+        } else {
+            el.textContent = formatLastActive(lastActive);
+            el.className = 'chat-status';
+        }
+    }
+    
+    // Initial setup from partner object
+    updateChatStatus(partner.is_online, partner.last_active);
+    
     const msgsArea = document.getElementById('messagesArea');
     const msgInput = document.getElementById('msgInput');
     const sendBtn = document.getElementById('sendBtn');
@@ -381,13 +435,36 @@
         }
 
         row.innerHTML = `
-            <div>
+            <div id="msg-${msg.id}">
                 <div class="msg-bubble">${contentHtml}</div>
                 <div class="msg-time">${formatTime(msg.created_at)}</div>
             </div>
         `;
         msgsArea.appendChild(row);
         scrollToBottom();
+        
+        // Mark as seen if it's from partner and socket is ready
+        if (!isMe && socket && socket.connected) {
+            socket.emit('mark_seen', { message_id: msg.id, to_uid: partner.uid });
+        }
+    }
+    
+    function updateSeenIndicator(msgId) {
+        // Remove old seen indicator
+        const oldSeen = document.querySelector('.seen-container');
+        if (oldSeen) oldSeen.remove();
+        
+        const msgDiv = document.getElementById('msg-' + msgId);
+        if (msgDiv) {
+            const seenHTML = `
+                <div class="seen-container">
+                    <div class="seen-indicator">${getInitials(partner.first_name, partner.last_name)}</div>
+                </div>
+            `;
+            msgDiv.insertAdjacentHTML('beforeend', seenHTML);
+            scrollToBottom();
+        }
+    }
         
         // Auto-load duration for audio
         if (payload.type === 'audio') {
@@ -534,7 +611,25 @@
             if (msgs.length === 0) {
                 msgsArea.innerHTML += `<div style="text-align:center; color:rgba(255,255,255,0.3); font-size:13px; margin:20px;">Start of your secure conversation with ${esc(partner.first_name)}</div>`;
             } else {
-                msgs.forEach(m => appendMessage(m));
+                let lastSeenMsgId = null;
+                let lastRecvMsgId = null;
+                
+                msgs.forEach(m => {
+                    appendMessage(m);
+                    if (m.from_uid === me.uid && m.read_at) {
+                        lastSeenMsgId = m.id;
+                    }
+                    if (m.from_uid === partner.uid) {
+                        lastRecvMsgId = m.id;
+                    }
+                });
+                
+                if (lastSeenMsgId) updateSeenIndicator(lastSeenMsgId);
+                
+                // If we loaded unread messages from partner, mark latest as seen
+                if (lastRecvMsgId && socket && socket.connected) {
+                    socket.emit('mark_seen', { message_id: lastRecvMsgId, to_uid: partner.uid });
+                }
             }
         } catch(e) {
             document.getElementById('loadingIndicator').textContent = 'Failed to load messages';
@@ -662,6 +757,21 @@
                 // If it's from the person we are chatting with
                 if (msg.from_uid === partner.uid) {
                     appendMessage(msg);
+                }
+            });
+            
+            socket.on('user_status', (data) => {
+                if (data.uid === partner.uid) {
+                    updateChatStatus(data.is_online, data.last_active);
+                    partner.is_online = data.is_online;
+                    partner.last_active = data.last_active;
+                    sessionStorage.setItem('callPartner', JSON.stringify(partner));
+                }
+            });
+            
+            socket.on('message_seen', (data) => {
+                if (data.by_uid === partner.uid) {
+                    updateSeenIndicator(data.message_id);
                 }
             });
         };

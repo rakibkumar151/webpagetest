@@ -236,7 +236,7 @@
             animation: slideUp 0.4s cubic-bezier(0.16,1,0.3,1) both;
         }
         .user-card:hover { background: var(--card-h); border-color: rgba(124,108,255,0.25); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
-        .user-card .avatar { flex-shrink: 0; }
+        .user-card .avatar { flex-shrink: 0; position: relative; }
         .user-card-info { flex: 1; min-width: 0; }
         .user-card-name { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
         .user-card-sub { font-size: 12px; color: var(--muted); }
@@ -479,10 +479,13 @@ function renderUsers(users) {
 
     list.innerHTML = users.map((u, i) => `
         <div class="user-card" style="animation-delay:${i * 0.04}s" onclick="startCall(${JSON.stringify(u).replace(/"/g, '&quot;')})">
-            <div class="avatar" style="background:${getColor(u.uid)}">${initials(u)}</div>
+            <div class="avatar" style="background:${getColor(u.uid)}">
+                ${initials(u)}
+                <div style="position:absolute; bottom:0; right:0; width:12px; height:12px; border-radius:50%; border:2px solid var(--surface); background:${u.is_online ? '#10b981' : '#6b7280'}"></div>
+            </div>
             <div class="user-card-info">
                 <div class="user-card-name">${esc(u.first_name)} ${esc(u.last_name)}</div>
-                <div class="user-card-sub">@${esc(u.username)}</div>
+                <div class="user-card-sub">@${esc(u.username)} • ${u.is_online ? '<span style="color:#10b981">Active now</span>' : esc(formatLastActive(u.last_active))}</div>
                 <div class="user-card-uid">${esc(u.uid)}</div>
             </div>
             <div class="user-card-actions">
@@ -499,6 +502,27 @@ function renderUsers(users) {
 
 function esc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatLastActive(isoString) {
+    if (!isoString) return 'Active a long time ago';
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) {
+        const d2 = new Date(isoString + 'Z');
+        if (isNaN(d2.getTime())) return 'Active a long time ago';
+        else isoString = isoString + 'Z';
+    }
+    const diff = Math.floor((new Date() - new Date(isoString)) / 1000);
+    if (diff < 60) return \`Active \${Math.max(1, diff)}s ago\`;
+    const m = Math.floor(diff / 60);
+    if (m < 60) return \`Active \${m}m ago\`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return \`Active \${h}h ago\`;
+    const days = Math.floor(h / 24);
+    if (days < 30) return \`Active \${days}d ago\`;
+    const mo = Math.floor(days / 30);
+    if (mo < 12) return \`Active \${mo}mo ago\`;
+    return \`Active \${Math.floor(mo / 12)}y ago\`;
 }
 
 async function loadUsers(q = '') {
