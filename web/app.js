@@ -299,7 +299,9 @@ joinBtn.addEventListener('click', async () => {
                 videoBtn.classList.add('active'); // Show disabled state
                 videoBtn.disabled = true;
                 switchCameraBtn.disabled = true;
-                localVideo.style.display = 'none'; // Hide local video
+                const localVideoStatus = document.getElementById('localVideoStatus');
+                if (localVideoStatus) localVideoStatus.classList.remove('hidden');
+                
                 showError('Camera not found or blocked. Joined with Audio only.', 5000);
             }
         }
@@ -388,6 +390,13 @@ videoBtn.addEventListener('click', async () => {
             videoBtn.classList.add('active');
             showError('Could not restart camera');
         }
+    }
+    
+    // Update local placeholder
+    const localVideoStatus = document.getElementById('localVideoStatus');
+    if (localVideoStatus) {
+        if (isVideoMuted) localVideoStatus.classList.remove('hidden');
+        else localVideoStatus.classList.add('hidden');
     }
     
     // Notify peer
@@ -488,8 +497,10 @@ function cleanupCall(isManual = false) {
     
     const remoteVideoStatus = document.getElementById('remoteVideoStatus');
     const remoteMicStatus = document.getElementById('remoteMicStatus');
+    const localVideoStatus = document.getElementById('localVideoStatus');
     if (remoteVideoStatus) remoteVideoStatus.classList.add('hidden');
     if (remoteMicStatus) remoteMicStatus.classList.add('hidden');
+    if (localVideoStatus) localVideoStatus.classList.add('hidden');
 
     setTimeout(() => switchScreen('join'), isManual ? 1500 : 2500);
 }
