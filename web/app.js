@@ -819,7 +819,8 @@ function cleanupCall(isManual = false) {
         try {
             const partner = JSON.parse(sessionStorage.getItem('callPartner') || 'null');
             if (partner && partner.uid) {
-                window.location.replace('chat.html?' + new URLSearchParams({ partner: JSON.stringify(partner) }));
+                sessionStorage.setItem('chatPartner', JSON.stringify(partner));
+                window.location.replace('chat.html');
                 return;
             }
         } catch(e) {}
@@ -940,7 +941,8 @@ socket.on('call_rejected', async () => {
     try {
         const partner = JSON.parse(sessionStorage.getItem('callPartner') || 'null');
         if (partner && partner.uid) {
-            window.location.replace('chat.html?' + new URLSearchParams({ partner: JSON.stringify(partner) }));
+            sessionStorage.setItem('chatPartner', JSON.stringify(partner));
+            window.location.replace('chat.html');
             return;
         }
     } catch(e) {}
@@ -960,7 +962,8 @@ socket.on('call_missed', async () => {
     try {
         const partner = JSON.parse(sessionStorage.getItem('callPartner') || 'null');
         if (partner && partner.uid) {
-            window.location.replace('chat.html?' + new URLSearchParams({ partner: JSON.stringify(partner) }));
+            sessionStorage.setItem('chatPartner', JSON.stringify(partner));
+            window.location.replace('chat.html');
             return;
         }
     } catch(e) {}
@@ -1216,7 +1219,8 @@ window.addEventListener('load', async () => {
                         try {
                             const partner = JSON.parse(sessionStorage.getItem('callPartner') || 'null');
                             if (partner && partner.uid) {
-                                window.location.replace('chat.html?' + new URLSearchParams({ partner: JSON.stringify(partner) }));
+                                sessionStorage.setItem('chatPartner', JSON.stringify(partner));
+                window.location.replace('chat.html');
                                 return;
                             }
                         } catch(e) {}
@@ -1249,7 +1253,8 @@ window.addEventListener('load', async () => {
                     try {
                         const partner = JSON.parse(sessionStorage.getItem('callPartner') || 'null');
                         if (partner && partner.uid) {
-                            window.location.replace('chat.html?' + new URLSearchParams({ partner: JSON.stringify(partner) }));
+                            sessionStorage.setItem('chatPartner', JSON.stringify(partner));
+                window.location.replace('chat.html');
                             return;
                         }
                     } catch(e2) {}
@@ -1267,7 +1272,8 @@ window.addEventListener('load', async () => {
         try {
             const partner = JSON.parse(sessionStorage.getItem('callPartner') || 'null');
             if (partner && partner.uid) {
-                window.location.replace('chat.html?' + new URLSearchParams({ partner: JSON.stringify(partner) }));
+                sessionStorage.setItem('chatPartner', JSON.stringify(partner));
+                window.location.replace('chat.html');
                 return;
             }
         } catch(e2) {}
