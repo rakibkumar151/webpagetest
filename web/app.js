@@ -720,13 +720,22 @@ function saveCallLogToDB(status, duration) {
                             duration: duration || 0
                         })
                     })
-                }).catch(()=>{});
+                }).then(async (res) => {
+                    if (!res.ok) {
+                        const errText = await res.text();
+                        alert('DB SAVE ERROR (' + res.status + '): ' + errText);
+                    }
+                }).catch((err) => {
+                    alert('FETCH FAILED: ' + err.message);
+                });
             } else {
                 sessionStorage.setItem('pendingCallLog', JSON.stringify({ status, duration }));
                 return Promise.resolve();
             }
         }
-    } catch(e) {}
+    } catch(e) {
+        alert('JS ERROR in saveCallLog: ' + e.message);
+    }
     return Promise.resolve();
 }
 
