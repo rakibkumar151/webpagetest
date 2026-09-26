@@ -455,7 +455,7 @@
                 <div style="display:flex; flex-direction:column; gap:4px; min-width: 180px;">
                     <strong style="font-size: 15px;">${title}</strong>
                     <div style="font-size: 12px; opacity: 0.7; margin-bottom: 8px;">${arrow} ${subText}, ${timeStr}</div>
-                    <button onclick="startCall(true)" style="background:transparent; color: inherit; font-weight: bold; font-size: 13px; border: none; padding: 10px 0 0 0; text-align: left; cursor: pointer; border-top: 1px solid rgba(255,255,255,0.15); width: 100%;">
+                    <button onclick="startCall(true)" style="background:transparent; color: var(--accent1); font-weight: bold; font-size: 13px; border: none; padding: 10px 0 0 0; text-align: left; cursor: pointer; border-top: 1px solid rgba(255,255,255,0.15); width: 100%;">
                         CALL ${isMe ? 'AGAIN' : 'BACK'}
                     </button>
                 </div>
@@ -465,10 +465,18 @@
             contentHtml = esc(payload.content || msg.text);
         }
 
+        let avatarHtml = '';
+        if (!isMe && payload.type === 'call_log') {
+            avatarHtml = `<div class="chat-avatar" style="width:28px; height:28px; font-size:12px; margin-right:8px; flex-shrink:0; align-self:flex-end;">${getInitials(partner.first_name, partner.last_name)}</div>`;
+        }
+
         row.innerHTML = `
-            <div id="msg-${msg.id}">
-                <div class="msg-bubble">${contentHtml}</div>
-                ${payload.type === 'call_log' ? '' : `<div class="msg-time">${formatTime(msg.created_at)}</div>`}
+            <div id="msg-${msg.id}" style="display:flex; flex-direction:row; align-items:flex-end;">
+                ${avatarHtml}
+                <div style="display:flex; flex-direction:column;">
+                    <div class="msg-bubble" style="${payload.type === 'call_log' && isMe ? 'background: var(--msg-recv) !important; color: var(--text) !important;' : ''}">${contentHtml}</div>
+                    ${payload.type === 'call_log' ? '' : `<div class="msg-time">${formatTime(msg.created_at)}</div>`}
+                </div>
             </div>
         `;
         msgsArea.appendChild(row);
