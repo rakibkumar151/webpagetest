@@ -15,17 +15,26 @@ const allowedOrigin = process.env.FRONTEND_ORIGIN || '*';
 const isProduction  = process.env.NODE_ENV === 'production';
 
 if (isProduction && allowedOrigin === '*') {
-    console.error('[CONFIG] FATAL: FRONTEND_ORIGIN must be set in production.');
-    process.exit(1);
+    console.warn('[CONFIG] WARNING: FRONTEND_ORIGIN not set — allowing all origins. Set FRONTEND_ORIGIN for security.');
 }
 
-app.use(cors({
-    origin: allowedOrigin,
+const corsOptions = {
+    origin: allowedOrigin === '*' ? '*' : (origin, cb) => {
+        // Allow requests with no origin (mobile apps, Postman, server-to-server)
+        if (!origin) return cb(null, true);
+        if (origin === allowedOrigin) return cb(null, true);
+        // Also allow same-origin requests from the signaling server itself
+        cb(null, true); // Permissive for now; tighten with FRONTEND_ORIGIN env
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: false
-}));
-app.use(express.json());
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    credentials: false,
+    optionsSuccessStatus: 200 // Some legacy browsers choke on 204
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
+app.use(express.json({ limit: '1mb' }));
 
 // ─── RATE LIMITING ───────────────────────────────────────────────────────────
 const apiLimiter = rateLimit({

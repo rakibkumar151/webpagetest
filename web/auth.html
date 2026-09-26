@@ -357,7 +357,8 @@ async function doLogin(e) {
         if (!r.ok) { setMsg('loginMsg', data.error || 'Login failed.', 'error'); return; }
         saveAndRedirect(data);
     } catch(err) {
-        setMsg('loginMsg', 'Connection error. Please try again.', 'error');
+        console.error('[LOGIN] fetch error:', err);
+        setMsg('loginMsg', 'Server unreachable. Make sure backend is deployed and running.', 'error');
     } finally {
         setLoading('loginBtn', false);
     }
@@ -384,7 +385,8 @@ async function doRegister(e) {
         if (!r.ok) { setMsg('registerMsg', data.error || 'Registration failed.', 'error'); return; }
         saveAndRedirect(data);
     } catch(err) {
-        setMsg('registerMsg', 'Connection error. Please try again.', 'error');
+        console.error('[REGISTER] fetch error:', err);
+        setMsg('registerMsg', 'Server unreachable. Make sure backend is deployed and running.', 'error');
     } finally {
         setLoading('registerBtn', false);
     }
