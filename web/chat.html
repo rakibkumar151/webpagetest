@@ -875,11 +875,15 @@
         
         let pressTimer;
         let touchStartX = 0;
+        let touchStartY = 0;
         let touchCurrentX = 0;
+        let isSwipingRight = false;
         const wrapper = row.querySelector('.msg-content-wrapper');
         
         wrapper.addEventListener('touchstart', (e) => {
             touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            isSwipingRight = false;
             pressTimer = setTimeout(() => {
                 e.preventDefault();
                 wrapper.querySelector('.reactions-bar').classList.add('active');
@@ -888,9 +892,25 @@
         });
         wrapper.addEventListener('touchmove', (e) => {
             clearTimeout(pressTimer);
+            if (touchStartX === 0) return; 
+            
             touchCurrentX = e.touches[0].clientX;
+            const touchCurrentY = e.touches[0].clientY;
+            
             const diffX = touchCurrentX - touchStartX;
-            if (diffX > 0 && diffX < 60) {
+            const diffY = Math.abs(touchCurrentY - touchStartY);
+            
+            // Abort swipe if scrolling vertically
+            if (!isSwipingRight && diffY > 10 && diffY > diffX) {
+                touchStartX = 0; 
+                return;
+            }
+            // Lock swipe if moving right
+            if (diffX > 15 && diffX > diffY) {
+                isSwipingRight = true;
+            }
+            
+            if (isSwipingRight && diffX > 0 && diffX < 70) {
                 wrapper.style.transform = `translateX(${diffX}px)`;
             }
         });
@@ -898,14 +918,15 @@
             clearTimeout(pressTimer);
             if (touchStartX === 0) return;
             const diffX = touchCurrentX - touchStartX;
-            wrapper.style.transform = `translateX(0)`;
-            wrapper.style.transition = `transform 0.2s`;
-            setTimeout(() => wrapper.style.transition = '', 200);
             
-            if (diffX > 40) {
+            wrapper.style.transform = `translateX(0)`;
+            wrapper.style.transition = `transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)`;
+            setTimeout(() => wrapper.style.transition = '', 250);
+            
+            if (isSwipingRight && diffX > 50) {
                 initiateReply(msg.id, payload, isMe ? me.first_name : partner.first_name);
             }
-            touchStartX = 0; touchCurrentX = 0;
+            touchStartX = 0; touchStartY = 0; touchCurrentX = 0; isSwipingRight = false;
         });
         
         if (msg.reactions) {
