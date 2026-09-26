@@ -336,7 +336,9 @@ function saveAndRedirect(data) {
         uid: data.uid,
         username: data.username,
         first_name: data.first_name,
-        last_name: data.last_name
+        last_name: data.last_name,
+        profile_photo: data.profile_photo,
+        is_verified: data.is_verified
     }));
     window.location.replace('home.html');
 }
