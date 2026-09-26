@@ -199,9 +199,24 @@
         .send-btn:hover { transform: scale(1.05); }
         .send-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
-        /* Media in bubbles */
-        .msg-bubble img { max-width: 220px; max-height: 250px; border-radius: 12px; display: block; object-fit: cover; }
-        .msg-bubble audio { max-width: 220px; height: 36px; outline: none; }
+        /* Media Custom Bubbles */
+        .msg-row.image-row .msg-bubble { padding: 0; background: transparent !important; }
+        .image-msg { max-width: 240px; max-height: 300px; border-radius: 18px; display: block; object-fit: cover; cursor: pointer; }
+        
+        .voice-msg { display: flex; align-items: center; gap: 12px; min-width: 180px; }
+        .voice-play-btn {
+            width: 38px; height: 38px; border-radius: 50%; border: none;
+            display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+            background: rgba(255,255,255,0.25); color: #fff;
+        }
+        .voice-play-btn svg { width: 18px; height: 18px; }
+        .msg-row.recv .voice-play-btn { background: var(--accent1); color: #fff; }
+        
+        .voice-track { flex: 1; height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px; position: relative; }
+        .msg-row.recv .voice-track { background: rgba(255,255,255,0.1); }
+        .voice-progress { position: absolute; left: 0; top: 0; bottom: 0; background: #fff; border-radius: 2px; width: 0%; transition: width 0.1s linear; }
+        .msg-row.recv .voice-progress { background: var(--accent1); }
+        .voice-time { font-size: 13px; font-weight: 500; opacity: 0.9; min-width: 32px; text-align: right; }
 
         .loading-chat {
             text-align: center; margin: auto; color: var(--muted);
@@ -325,16 +340,25 @@
     function appendMessage(msg) {
         const isMe = msg.from_uid === me.uid;
         const row = document.createElement('div');
-        row.className = `msg-row ${isMe ? 'sent' : 'recv'}`;
         
         let payload = { type: 'text', content: msg.text };
         try { payload = JSON.parse(msg.text); } catch(e) {}
         
+        row.className = `msg-row ${isMe ? 'sent' : 'recv'} ${payload.type === 'image' ? 'image-row' : ''}`;
+        
         let contentHtml = '';
         if (payload.type === 'image') {
-            contentHtml = `<img src="${payload.url}" alt="Image">`;
+            contentHtml = `<img src="${payload.url}" class="image-msg" onclick="openImage(this.src)">`;
         } else if (payload.type === 'audio') {
-            contentHtml = `<audio controls src="${payload.url}"></audio>`;
+            contentHtml = `
+                <div class="voice-msg">
+                    <button class="voice-play-btn" data-url="${payload.url}" onclick="toggleVoice(this)">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                    </button>
+                    <div class="voice-track"><div class="voice-progress"></div></div>
+                    <div class="voice-time">0:00</div>
+                </div>
+            `;
         } else {
             contentHtml = esc(payload.content || msg.text);
         }
@@ -347,6 +371,81 @@
         `;
         msgsArea.appendChild(row);
         scrollToBottom();
+        
+        // Auto-load duration for audio
+        if (payload.type === 'audio') {
+            const btn = row.querySelector('.voice-play-btn');
+            const timeEl = row.querySelector('.voice-time');
+            const tempAudio = new Audio(payload.url);
+            tempAudio.addEventListener('loadedmetadata', () => {
+                const dur = Math.floor(tempAudio.duration) || 0;
+                timeEl.textContent = `0:${dur < 10 ? '0'+dur : dur}`;
+            });
+        }
+    }
+    
+    // --- CUSTOM MEDIA VIEWERS ---
+    function openImage(src) {
+        const viewer = document.createElement('div');
+        viewer.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.95);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(10px);';
+        viewer.innerHTML = `<img src="${src}" style="max-width:95%;max-height:95%;border-radius:16px;object-fit:contain;box-shadow:0 20px 40px rgba(0,0,0,0.5);">`;
+        viewer.onclick = () => viewer.remove();
+        document.body.appendChild(viewer);
+    }
+    
+    let currentAudio = null;
+    let currentVoiceBtn = null;
+    let timeUpdateInterval;
+
+    function toggleVoice(btn) {
+        const url = btn.getAttribute('data-url');
+        if (currentAudio && currentAudio.src === url) {
+            if (currentAudio.paused) {
+                currentAudio.play();
+                setPlayIcon(btn, true);
+            } else {
+                currentAudio.pause();
+                setPlayIcon(btn, false);
+            }
+            return;
+        }
+        
+        if (currentAudio) {
+            currentAudio.pause();
+            if (currentVoiceBtn) setPlayIcon(currentVoiceBtn, false);
+        }
+        
+        currentAudio = new Audio(url);
+        currentVoiceBtn = btn;
+        
+        const track = btn.nextElementSibling.querySelector('.voice-progress');
+        const timeEl = btn.parentElement.querySelector('.voice-time');
+        
+        currentAudio.play();
+        setPlayIcon(btn, true);
+        
+        currentAudio.addEventListener('timeupdate', () => {
+            const percent = (currentAudio.currentTime / currentAudio.duration) * 100;
+            track.style.width = `${percent}%`;
+            
+            const elapsed = Math.floor(currentAudio.currentTime) || 0;
+            timeEl.textContent = `0:${elapsed < 10 ? '0'+elapsed : elapsed}`;
+        });
+        
+        currentAudio.addEventListener('ended', () => {
+            setPlayIcon(btn, false);
+            track.style.width = `0%`;
+            const dur = Math.floor(currentAudio.duration) || 0;
+            timeEl.textContent = `0:${dur < 10 ? '0'+dur : dur}`;
+        });
+    }
+
+    function setPlayIcon(btn, isPlaying) {
+        if (isPlaying) {
+            btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+        } else {
+            btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+        }
     }
     
     // --- CALLS & THEMES ---
