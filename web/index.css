@@ -159,49 +159,52 @@ input[type="text"]:focus { border-color: var(--primary); }
 
 .video-overlay-top {
     position: absolute;
-    top: max(20px, env(safe-area-inset-top));
-    left: 20px;
-    z-index: 10;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    align-items: flex-start;
-}
-
-.brand-name {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: white;
-    letter-spacing: 0.5px;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
-    margin-bottom: 4px;
-}
-
-.video-overlay-top .timer {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: white;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.9);
-}
-
-.video-controls {
-    position: fixed;
-    bottom: max(30px, env(safe-area-inset-bottom));
+    top: max(15px, env(safe-area-inset-top));
     left: 50%;
     transform: translateX(-50%);
-    z-index: 999;
+    z-index: 10;
     display: flex;
-    flex-direction: row;
-    align-items: center;
     justify-content: center;
-    gap: 20px;
-    background: rgba(0,0,0,0.6);
-    padding: 15px 25px;
-    border-radius: 40px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-    width: max-content;
-    max-width: 95vw;
+    width: 100%;
+    pointer-events: none; /* Let clicks pass through to video */
 }
+
+.call-stats-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.45);
+    padding: 6px 12px;
+    border-radius: 20px;
+    backdrop-filter: blur(4px);
+    pointer-events: auto;
+}
+
+.call-stats-bar .timer {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: white;
+    font-variant-numeric: tabular-nums;
+}
+
+.status-pill, .quality-pill {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.95);
+    padding-left: 8px;
+    border-left: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.status-dot.idle { background-color: var(--text-secondary); }
+.status-dot.connecting { background-color: var(--primary); }
+.status-dot.connected { background-color: var(--success); }
+.status-dot.reconnecting, .status-dot.degraded, .status-dot.recovering { background-color: var(--warning); }
+.status-dot.failed, .status-dot.ended { background-color: var(--danger); }
+
+.status-text { font-weight: 500; }
 
 .control-btn {
     width: 54px;
@@ -289,26 +292,24 @@ body:has(#callScreen.active) {
     }
 }
 
-.status-container {
+.video-controls {
+    position: fixed;
+    bottom: max(30px, env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 999;
     display: flex;
+    flex-direction: row;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    background-color: rgba(0, 0, 0, 0.65); /* Darker for better visibility */
-    border-radius: 2rem;
-    font-size: 0.85rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-    margin-top: 4px;
+    justify-content: center;
+    gap: 20px;
+    background: rgba(0,0,0,0.6);
+    padding: 15px 25px;
+    border-radius: 40px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    width: max-content;
+    max-width: 95vw;
 }
-.status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.status-dot.idle { background-color: var(--text-secondary); }
-.status-dot.connecting { background-color: var(--primary); }
-.status-dot.connected { background-color: var(--success); }
-.status-dot.reconnecting, .status-dot.degraded, .status-dot.recovering { background-color: var(--warning); }
-.status-dot.failed, .status-dot.ended { background-color: var(--danger); }
-
-.status-text { color: white; font-weight: 500; }
-.quality-indicator { font-size: 0.8rem; color: white; text-shadow: 0 1px 3px rgba(0,0,0,0.8); background: rgba(0,0,0,0.5); padding: 2px 8px; border-radius: 12px;}
 
 .error-notification {
     background-color: var(--danger);
