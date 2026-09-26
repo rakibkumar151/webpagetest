@@ -691,8 +691,11 @@
                 <input type="text" id="inputLastName" placeholder="Last Name">
             </div>
             <div class="form-group">
-                <label>Tagline (e.g. Dreamer | Developer | Traveller)</label>
-                <input type="text" id="inputTagline" placeholder="Short tagline">
+                <label>Tagline</label>
+                <div class="location-autocomplete" id="taglineAutocomplete">
+                    <input type="text" id="inputTagline" placeholder="Search or type your tagline..." autocomplete="off" oninput="filterTaglines(this.value)" onfocus="filterTaglines(this.value)">
+                    <div class="location-dropdown" id="taglineDropdown"></div>
+                </div>
             </div>
             <div class="form-group">
                 <label>Bio</label>
@@ -795,6 +798,88 @@
         ];
 
         let activeLocIdx = -1;
+        let activeTagIdx = -1;
+
+        // ─── Tagline Suggestions ──────────────────────────────────────────────
+        const TAGLINES = [
+            'Dreamer | Developer | Traveller',
+            'Builder | Thinker | Creator',
+            'Designer | Developer | Maker',
+            'Student | Coder | Explorer',
+            'Writer | Reader | Dreamer',
+            'Engineer | Innovator | Problem Solver',
+            'Artist | Creator | Visionary',
+            'Entrepreneur | Leader | Achiever',
+            'Photographer | Adventurer | Storyteller',
+            'Gamer | Developer | Tech Enthusiast',
+            'Music Lover | Foodie | Explorer',
+            'Blockchain | Web3 | Future Builder',
+            'AI Enthusiast | Coder | Dreamer',
+            'Full Stack Developer | Open Source',
+            'Frontend Dev | UI/UX | Design Lover',
+            'Backend Dev | System Design | Cloud',
+            'Mobile Dev | React Native | Flutter',
+            'Data Scientist | ML Engineer | Researcher',
+            'Cybersecurity | Ethical Hacker | CTF',
+            'DevOps | Cloud | Infrastructure',
+            'Product Manager | Strategist | Builder',
+            'Digital Marketer | Growth Hacker',
+            'Content Creator | YouTuber | Blogger',
+            'Motivational | Positive Vibes | Grind',
+            'Coffee ☕ | Code 💻 | Repeat 🔁',
+            'Work Hard | Dream Big | Stay Humble',
+            'Born to Build | Living to Code',
+            'Think. Create. Inspire.',
+            'Code is Poetry 🚀',
+            'Making Ideas a Reality',
+            'Living Life on My Own Terms',
+            'Always Learning | Always Growing',
+            'Turning Caffeine into Code',
+            'Creating Things That Matter',
+            'Passionate About Technology & People',
+            'Simplicity is the Ultimate Sophistication',
+            'Life is Short | Make it Count',
+            'Stay Curious | Stay Hungry',
+            'Engineering the Future | One Line at a Time',
+            'Startup Founder | Hustler | Dreamer',
+            'Student at Heart | Learner for Life',
+            'Teacher | Mentor | Lifelong Learner',
+            'Researcher | Analyst | Innovator',
+            'Bookworm | Cinephile | Wanderlust',
+            'Fitness | Focus | Hustle',
+            'Dad | Dev | Designer',
+            'Mom | Manager | Maker',
+            'ভ্রমণকারী | স্বপ্নদ্রষ্টা | উদ্যোক্তা',
+            'শিক্ষার্থী | কোডার | স্বপ্নবাজ',
+            'ডেভেলপার | ডিজাইনার | স্রষ্টা'
+        ];
+
+        function filterTaglines(query) {
+            const drop = document.getElementById('taglineDropdown');
+            const q = query.trim().toLowerCase();
+            const list = q
+                ? TAGLINES.filter(t => t.toLowerCase().includes(q)).slice(0, 8)
+                : TAGLINES.slice(0, 8);
+            if (!list.length) {
+                drop.innerHTML = '<div class="location-no-results">No suggestions</div>';
+                drop.classList.add('open');
+                return;
+            }
+            drop.innerHTML = list.map((t, i) => {
+                const hi = q ? t.replace(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi'), '<strong>$1</strong>') : t;
+                return `<div class="location-item" data-idx="${i}" onmousedown="selectTagline('${t.replace(/'/g,"\\'")}')"><span class="loc-name">${hi}</span></div>`;
+            }).join('');
+            drop.classList.add('open');
+            activeTagIdx = -1;
+        }
+
+        function selectTagline(val) {
+            document.getElementById('inputTagline').value = val;
+            document.getElementById('taglineDropdown').classList.remove('open');
+            document.getElementById('taglineDropdown').innerHTML = '';
+        }
+
+        // Close tagline dropdown on outside click (merged into existing listener below)
 
         function filterLocations(query) {
             const drop = document.getElementById('locationDropdown');
@@ -826,36 +911,42 @@
             document.getElementById('locationDropdown').innerHTML = '';
         }
 
-        // Close dropdown on outside click
+        // Close dropdowns on outside click
         document.addEventListener('click', function(e) {
             if (!document.getElementById('locationAutocomplete')?.contains(e.target)) {
                 const drop = document.getElementById('locationDropdown');
                 if (drop) drop.classList.remove('open');
             }
+            if (!document.getElementById('taglineAutocomplete')?.contains(e.target)) {
+                const drop = document.getElementById('taglineDropdown');
+                if (drop) drop.classList.remove('open');
+            }
         });
 
-        // Arrow key navigation in location dropdown
+        // Arrow key navigation in dropdowns
         document.addEventListener('keydown', function(e) {
-            const input = document.getElementById('inputLocation');
-            const drop = document.getElementById('locationDropdown');
-            if (!drop || !drop.classList.contains('open')) return;
-            const items = drop.querySelectorAll('.location-item');
-            if (!items.length) return;
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                activeLocIdx = Math.min(activeLocIdx + 1, items.length - 1);
-                items.forEach((el, i) => el.classList.toggle('active', i === activeLocIdx));
-                items[activeLocIdx]?.scrollIntoView({ block: 'nearest' });
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                activeLocIdx = Math.max(activeLocIdx - 1, 0);
-                items.forEach((el, i) => el.classList.toggle('active', i === activeLocIdx));
-                items[activeLocIdx]?.scrollIntoView({ block: 'nearest' });
-            } else if (e.key === 'Enter' && activeLocIdx >= 0) {
-                e.preventDefault();
-                items[activeLocIdx]?.dispatchEvent(new MouseEvent('mousedown'));
-            } else if (e.key === 'Escape') {
-                drop.classList.remove('open');
+            // Location dropdown
+            const locDrop = document.getElementById('locationDropdown');
+            if (locDrop && locDrop.classList.contains('open')) {
+                const items = locDrop.querySelectorAll('.location-item');
+                if (items.length) {
+                    if (e.key === 'ArrowDown') { e.preventDefault(); activeLocIdx = Math.min(activeLocIdx + 1, items.length - 1); items.forEach((el,i) => el.classList.toggle('active', i === activeLocIdx)); items[activeLocIdx]?.scrollIntoView({block:'nearest'}); }
+                    else if (e.key === 'ArrowUp') { e.preventDefault(); activeLocIdx = Math.max(activeLocIdx - 1, 0); items.forEach((el,i) => el.classList.toggle('active', i === activeLocIdx)); items[activeLocIdx]?.scrollIntoView({block:'nearest'}); }
+                    else if (e.key === 'Enter' && activeLocIdx >= 0) { e.preventDefault(); items[activeLocIdx]?.dispatchEvent(new MouseEvent('mousedown')); }
+                    else if (e.key === 'Escape') locDrop.classList.remove('open');
+                    return;
+                }
+            }
+            // Tagline dropdown
+            const tagDrop = document.getElementById('taglineDropdown');
+            if (tagDrop && tagDrop.classList.contains('open')) {
+                const items = tagDrop.querySelectorAll('.location-item');
+                if (items.length) {
+                    if (e.key === 'ArrowDown') { e.preventDefault(); activeTagIdx = Math.min(activeTagIdx + 1, items.length - 1); items.forEach((el,i) => el.classList.toggle('active', i === activeTagIdx)); items[activeTagIdx]?.scrollIntoView({block:'nearest'}); }
+                    else if (e.key === 'ArrowUp') { e.preventDefault(); activeTagIdx = Math.max(activeTagIdx - 1, 0); items.forEach((el,i) => el.classList.toggle('active', i === activeTagIdx)); items[activeTagIdx]?.scrollIntoView({block:'nearest'}); }
+                    else if (e.key === 'Enter' && activeTagIdx >= 0) { e.preventDefault(); items[activeTagIdx]?.dispatchEvent(new MouseEvent('mousedown')); }
+                    else if (e.key === 'Escape') tagDrop.classList.remove('open');
+                }
             }
         });
 
