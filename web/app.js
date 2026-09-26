@@ -1292,9 +1292,9 @@ window.addEventListener('load', async () => {
 const qualityConfigs = {
     '144':  { width: { ideal: 256 },  height: { ideal: 144 },  frameRate: { ideal: 15 } },
     '360':  { width: { ideal: 640 },  height: { ideal: 360 },  frameRate: { ideal: 24 } },
-    '480':  { width: { ideal: 854 },  height: { ideal: 480 },  frameRate: { ideal: 24 } },
-    '720':  { width: { ideal: 1280 }, height: { ideal: 720 },  frameRate: { ideal: 30 } },
-    '1080': { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
+    '480':  { width: { ideal: 854 },  height: { ideal: 480 },  frameRate: { ideal: 30 } },
+    '720':  { width: { ideal: 1280 }, height: { ideal: 720 },  frameRate: { ideal: 60 } },
+    '1080': { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } },
     '2160': { width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 60 } }
 };
 
