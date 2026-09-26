@@ -630,8 +630,12 @@
                 if (lastSeenMsgId) updateSeenIndicator(lastSeenMsgId);
                 
                 // If we loaded unread messages from partner, mark latest as seen
-                if (lastRecvMsgId && socket && socket.connected) {
-                    socket.emit('mark_seen', { message_id: lastRecvMsgId, to_uid: partner.uid });
+                if (lastRecvMsgId) {
+                    if (typeof socket !== 'undefined' && socket && socket.connected) {
+                        socket.emit('mark_seen', { message_id: lastRecvMsgId, to_uid: partner.uid });
+                    } else {
+                        window.pendingSeenId = lastRecvMsgId;
+                    }
                 }
             }
         } catch(e) {
@@ -755,6 +759,10 @@
             socket = io(API, { transports: ['websocket', 'polling'] });
             socket.on('connect', () => {
                 socket.emit('register_user', token);
+                if (window.pendingSeenId) {
+                    socket.emit('mark_seen', { message_id: window.pendingSeenId, to_uid: partner.uid });
+                    window.pendingSeenId = null;
+                }
             });
             socket.on('new_message', (msg) => {
                 // If it's from the person we are chatting with

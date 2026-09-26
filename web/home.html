@@ -552,7 +552,38 @@ document.getElementById('searchInput').addEventListener('input', (e) => {
 
 // Init
 initProfile();
-loadUsers();
+loadUsers().then(() => {
+    var s = document.createElement('script');
+    s.src = API + '/socket.io/socket.io.js';
+    s.onload = function() {
+        const socket = io(API, { transports: ['websocket', 'polling'] });
+        socket.on('connect', () => {
+            socket.emit('register_user', token);
+        });
+        socket.on('user_status', (data) => {
+            const user = allUsers.find(u => u.uid === data.uid);
+            if (user) {
+                user.is_online = data.is_online;
+                user.last_active = data.last_active;
+                
+                const q = document.getElementById('searchInput').value.trim();
+                if (!q) {
+                    renderUsers(allUsers);
+                } else {
+                    const lq = q.toLowerCase();
+                    const filtered = allUsers.filter(u => 
+                        (u.username||'').toLowerCase().includes(lq) || 
+                        (u.first_name||'').toLowerCase().includes(lq) || 
+                        (u.last_name||'').toLowerCase().includes(lq) || 
+                        (u.uid||'').toLowerCase().includes(lq)
+                    );
+                    renderUsers(filtered);
+                }
+            }
+        });
+    };
+    document.body.appendChild(s);
+});
 </script>
 </body>
 </html>
