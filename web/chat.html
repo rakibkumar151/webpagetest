@@ -317,6 +317,42 @@
         .msg-row.recv .msg-reactions { right: auto; left: 0; }
         .msg-reactions.hidden { display: none; }
 
+        /* Reply Preview in Input */
+        .reply-input-preview {
+            display: none; padding: 10px 14px; background: rgba(255,255,255,0.06);
+            border-left: 4px solid var(--accent1); border-radius: 12px 12px 0 0;
+            margin: 0 16px; font-size: 13px; color: var(--muted); position: relative;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            backdrop-filter: blur(5px);
+        }
+        .reply-input-preview.active { display: block; }
+        .reply-input-close {
+            position: absolute; right: 10px; top: 10px; background: none; border: none; 
+            color: var(--muted); cursor: pointer; padding: 2px; font-size: 16px;
+        }
+        .reply-input-close:hover { color: var(--text); }
+
+        /* Reply Preview in Message Bubble */
+        .msg-reply-preview {
+            font-size: 12px; color: rgba(255,255,255,0.7); background: rgba(0,0,0,0.15);
+            padding: 8px 10px; border-radius: 8px; margin-bottom: 6px;
+            border-left: 4px solid var(--accent1);
+            cursor: pointer; transition: opacity 0.2s;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            display: block; width: 100%; box-sizing: border-box;
+        }
+        .msg-reply-preview:hover { opacity: 0.9; }
+        .msg-row.recv .msg-reply-preview {
+            color: rgba(0,0,0,0.6); background: rgba(0,0,0,0.06); border-left-color: var(--accent2);
+        }
+
+        /* Highlight animation when clicked */
+        @keyframes highlightMsg {
+            0% { background: rgba(124, 108, 255, 0.4); }
+            100% { background: transparent; }
+        }
+        .msg-highlight { animation: highlightMsg 2s ease-out; border-radius: 8px; }
+
         /* Input Area */
         .chat-input-area {
             padding: 12px 20px;
@@ -549,6 +585,12 @@
         <div class="loading-chat" id="loadingIndicator">Loading messages...</div>
     </div>
     
+    <div id="replyPreviewContainer" class="reply-input-preview">
+        <div style="font-weight:600; margin-bottom:4px; color:var(--text)" id="replyPreviewName">Name</div>
+        <div id="replyPreviewText">Text</div>
+        <button class="reply-input-close" onclick="cancelReply()">✕</button>
+    </div>
+
     <div class="chat-input-area">
         <input type="file" id="imageInput" accept="image/*" style="display:none">
         <button class="chat-tool-btn" onclick="document.getElementById('imageInput').click()" title="Send Image">
@@ -743,11 +785,26 @@
                 avatarHtml = `<div class="chat-avatar" style="width:28px; height:28px; font-size:12px; margin-right:8px; flex-shrink:0; align-self:flex-end;">${getInitials(partner.first_name, partner.last_name)}</div>`;
             }
         }
+        
+        let replyPreviewHtml = '';
+        if (payload.reply_to) {
+            let replyText = payload.reply_to.type === 'text' ? payload.reply_to.content : (payload.reply_to.type === 'image' ? '📷 Photo' : '🎤 Voice');
+            replyPreviewHtml = `
+                <div class="msg-reply-preview" onclick="scrollToMsg(${payload.reply_to.id})">
+                    <div style="font-weight:600; margin-bottom:2px; color:var(--accent1)">${esc(payload.reply_to.from_name)}</div>
+                    <div>${esc(replyText)}</div>
+                </div>
+            `;
+        }
 
         const emojis = ['❤️', '😂', '😮', '😢', '😡', '👍'];
         const reactionsBarHTML = `
             <div class="reactions-bar">
                 ${emojis.map(e => `<button class="reaction-btn" onclick="sendReaction(${msg.id}, '${e}')">${e}</button>`).join('')}
+                <div style="width:1px; background:var(--border); margin: 2px 4px;"></div>
+                <button class="reaction-btn" style="display:flex; align-items:center; justify-content:center; color: var(--muted);" onclick="initiateReply(${msg.id}, ${JSON.stringify(payload).replace(/"/g, '&quot;')}, '${isMe ? esc(me.first_name) : esc(partner.first_name)}')">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"></polyline><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path></svg>
+                </button>
             </div>
         `;
 
@@ -756,6 +813,7 @@
                 ${reactionsBarHTML}
                 ${avatarHtml}
                 <div class="msg-bubble-wrapper">
+                    ${replyPreviewHtml}
                     <div class="msg-bubble" style="${payload.type === 'call_log' ? 'padding: 12px; ' : ''}${payload.type === 'call_log' && isMe ? 'background: var(--msg-recv) !important; color: var(--text) !important;' : ''}">${contentHtml}</div>
                     ${payload.type === 'call_log' ? '' : `<div class="msg-time">${formatTime(msg.created_at)}</div>`}
                     <div class="msg-reactions hidden" id="reactions-${msg.id}"></div>
@@ -766,15 +824,39 @@
         scrollToBottom();
         
         let pressTimer;
+        let touchStartX = 0;
+        let touchCurrentX = 0;
         const wrapper = row.querySelector('.msg-content-wrapper');
+        
         wrapper.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
             pressTimer = setTimeout(() => {
                 e.preventDefault();
                 wrapper.querySelector('.reactions-bar').classList.add('active');
+                if(window.navigator.vibrate) window.navigator.vibrate(50);
             }, 500);
         });
-        wrapper.addEventListener('touchend', () => clearTimeout(pressTimer));
-        wrapper.addEventListener('touchmove', () => clearTimeout(pressTimer));
+        wrapper.addEventListener('touchmove', (e) => {
+            clearTimeout(pressTimer);
+            touchCurrentX = e.touches[0].clientX;
+            const diffX = touchCurrentX - touchStartX;
+            if (diffX > 0 && diffX < 60) {
+                wrapper.style.transform = `translateX(${diffX}px)`;
+            }
+        });
+        wrapper.addEventListener('touchend', (e) => {
+            clearTimeout(pressTimer);
+            if (touchStartX === 0) return;
+            const diffX = touchCurrentX - touchStartX;
+            wrapper.style.transform = `translateX(0)`;
+            wrapper.style.transition = `transform 0.2s`;
+            setTimeout(() => wrapper.style.transition = '', 200);
+            
+            if (diffX > 40) {
+                initiateReply(msg.id, payload, isMe ? me.first_name : partner.first_name);
+            }
+            touchStartX = 0; touchCurrentX = 0;
+        });
         
         if (msg.reactions) {
             renderReactions(msg.id, msg.reactions);
@@ -1155,8 +1237,46 @@
         }
     }
     
+    let replyingTo = null; // { id, type, content, from_name }
+    
+    function initiateReply(msgId, payload, fromName) {
+        replyingTo = {
+            id: msgId,
+            type: payload.type || 'text',
+            content: payload.content || '',
+            from_name: fromName
+        };
+        const prev = document.getElementById('replyPreviewContainer');
+        const name = document.getElementById('replyPreviewName');
+        const text = document.getElementById('replyPreviewText');
+        
+        name.textContent = fromName;
+        text.textContent = replyingTo.type === 'text' ? replyingTo.content : (replyingTo.type === 'image' ? '📷 Photo' : '🎤 Voice');
+        
+        prev.classList.add('active');
+        document.getElementById('msgInput').focus();
+    }
+    
+    function cancelReply() {
+        replyingTo = null;
+        document.getElementById('replyPreviewContainer').classList.remove('active');
+    }
+    
+    function scrollToMsg(msgId) {
+        const el = document.getElementById('msg-' + msgId);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.classList.add('msg-highlight');
+            setTimeout(() => el.classList.remove('msg-highlight'), 2000);
+        }
+    }
+
     // --- SENDING LOGIC ---
     async function sendPayload(payload) {
+        if (replyingTo) {
+            payload.reply_to = replyingTo;
+            cancelReply();
+        }
         try {
             const res = await fetch(`${API}/api/messages`, {
                 method: 'POST',
