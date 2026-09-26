@@ -276,6 +276,7 @@
             background: var(--surface); display: flex; align-items: center; justify-content: center;
             font-size: 8px; font-weight: bold; color: var(--text);
             border: 1px solid var(--border);
+            overflow: hidden;
         }
 
         /* Input Area */
@@ -742,9 +743,15 @@
         const msgDiv = document.getElementById('msg-' + msgId);
         if (msgDiv) {
             const wrapper = msgDiv.querySelector('.msg-bubble-wrapper') || msgDiv;
+            let seenContent = '';
+            if (partner.profile_photo) {
+                seenContent = `<img src="${partner.profile_photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+            } else {
+                seenContent = getInitials(partner.first_name, partner.last_name);
+            }
             const seenHTML = `
                 <div class="seen-container">
-                    <div class="seen-indicator">${getInitials(partner.first_name, partner.last_name)}</div>
+                    <div class="seen-indicator">${seenContent}</div>
                 </div>
             `;
             wrapper.insertAdjacentHTML('beforeend', seenHTML);
