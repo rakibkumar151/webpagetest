@@ -647,9 +647,18 @@ async function startCall(user) {
             secondsConnected: 0,
             isMuted: false,
             isVideoMuted: true,
-            isRemoteScreenSharing: false
+            isRemoteScreenSharing: false,
+            isCaller: true
         }));
         sessionStorage.setItem('callPartner', JSON.stringify(user));
+        
+        // Notify the recipient
+        socket.emit('incoming_call', {
+            to_uid: user.uid,
+            caller: me,
+            callId: data.callId,
+            isVideo: false
+        });
 
         // Navigate without callId in URL
         window.location.href = 'index.html';
@@ -906,7 +915,7 @@ loadUsers().then(() => {
                 isRemoteScreenSharing: false,
                 isCaller: false
             }));
-            sessionStorage.setItem('callPartner', JSON.stringify({ uid: data.from_uid, first_name: data.caller.first_name, last_name: data.caller.last_name }));
+            sessionStorage.setItem('callPartner', JSON.stringify({ uid: data.from_uid, first_name: data.caller.first_name, last_name: data.caller.last_name, is_verified: data.caller.is_verified, profile_photo: data.caller.profile_photo }));
             window.location.href = 'index.html';
         };
     };

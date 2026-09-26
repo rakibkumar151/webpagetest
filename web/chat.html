@@ -1272,7 +1272,7 @@
             isRemoteScreenSharing: false,
             isCaller: false
         }));
-        sessionStorage.setItem('callPartner', JSON.stringify({ ...partner, uid: data.from_uid }));
+        sessionStorage.setItem('callPartner', JSON.stringify({ ...partner, uid: data.from_uid, is_verified: data.caller.is_verified, profile_photo: data.caller.profile_photo }));
         window.location.href = 'index.html';
     }
 
