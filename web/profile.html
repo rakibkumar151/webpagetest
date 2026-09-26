@@ -588,6 +588,30 @@
             transform: translateX(-50%) translateY(0);
         }
 
+        /* Upload Overlay */
+        .upload-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(10, 14, 23, 0.85);
+            backdrop-filter: blur(4px);
+            z-index: 9999;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+        }
+        .upload-overlay.active { display: flex; }
+        .upload-spinner {
+            width: 45px; height: 45px;
+            border: 4px solid rgba(255,255,255,0.1);
+            border-top: 4px solid var(--accent1);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
         /* Responsive Mobile Adjustments matching prompt images */
         @media (max-width: 640px) {
             .cover-container {
@@ -617,6 +641,12 @@
     </style>
 </head>
 <body>
+
+    <!-- Upload Overlay -->
+    <div class="upload-overlay" id="uploadOverlay">
+        <div class="upload-spinner"></div>
+        <h3 id="uploadStatusText">Uploading... Please wait</h3>
+    </div>
 
     <div class="profile-container">
 
@@ -1207,7 +1237,25 @@
             reader.readAsDataURL(file);
         }
 
+        let isUploading = false;
+
+        function setUploadState(active, text = 'Uploading... Please wait') {
+            isUploading = active;
+            const overlay = document.getElementById('uploadOverlay');
+            document.getElementById('uploadStatusText').textContent = text;
+            if (active) {
+                overlay.classList.add('active');
+                document.getElementById('avatarInput').disabled = true;
+                document.getElementById('coverInput').disabled = true;
+            } else {
+                overlay.classList.remove('active');
+                document.getElementById('avatarInput').disabled = false;
+                document.getElementById('coverInput').disabled = false;
+            }
+        }
+
         function handleAvatarUpload(e) {
+            if (isUploading) return;
             const file = e.target.files[0];
             if (!file) return;
 
@@ -1219,7 +1267,7 @@
                 return;
             }
 
-            showToast('Uploading avatar...');
+            setUploadState(true, 'Uploading Avatar (GIF/Image)...');
             compressImage(file, 400, 0.85, async (base64) => {
                 try {
                     const res = await fetch(`${API}/api/users/profile`, {
@@ -1229,7 +1277,7 @@
                     });
                     const data = await res.json();
                     if (data.success) {
-                        showToast('Avatar updated! ✅');
+                        showToast('Avatar updated successfully! ✅');
                         if (data.user) {
                             myUser = { ...myUser, ...data.user };
                             localStorage.setItem('chet_user', JSON.stringify(myUser));
@@ -1242,12 +1290,15 @@
                     }
                 } catch(err) {
                     showToast('Upload error — check connection');
+                } finally {
+                    e.target.value = '';
+                    setUploadState(false);
                 }
-                e.target.value = '';
             });
         }
 
         function handleCoverUpload(e) {
+            if (isUploading) return;
             const file = e.target.files[0];
             if (!file) return;
 
@@ -1259,7 +1310,7 @@
                 return;
             }
 
-            showToast('Uploading cover photo...');
+            setUploadState(true, 'Uploading Cover (GIF/Image)...');
             // Cover: wider crop, slightly lower quality to keep size manageable
             compressImage(file, 1400, 0.82, async (base64) => {
                 try {
@@ -1270,7 +1321,7 @@
                     });
                     const data = await res.json();
                     if (data.success) {
-                        showToast('Cover photo updated! ✅');
+                        showToast('Cover updated successfully! ✅');
                         if (data.user) {
                             myUser = { ...myUser, ...data.user };
                             localStorage.setItem('chet_user', JSON.stringify(myUser));
@@ -1283,8 +1334,10 @@
                     }
                 } catch(err) {
                     showToast('Upload error — check connection');
+                } finally {
+                    e.target.value = '';
+                    setUploadState(false);
                 }
-                e.target.value = '';
             });
         }
 
