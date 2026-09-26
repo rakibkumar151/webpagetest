@@ -1220,7 +1220,8 @@
             document.getElementById('incomingCallAvatar').textContent = getInitials(data.caller.first_name, data.caller.last_name);
             document.getElementById('incomingCallAvatar').style.background = 'linear-gradient(135deg, var(--accent1), var(--accent2))';
         }
-        document.getElementById('incomingCallName').textContent = (data.caller.first_name || '') + ' ' + (data.caller.last_name || '');
+        const badgeHtml = data.caller.is_verified ? `<span class="verified-badge" style="margin-left:4px" title=""><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="#1d9bf0"/><path d="M9.5 16.5l-3-3 1.4-1.4 1.6 1.6 5.6-5.6 1.4 1.4z" fill="#fff"/></svg><span class="badge-tooltip">Verified Account</span></span>` : '';
+        document.getElementById('incomingCallName').innerHTML = `<div style="display:flex;align-items:center;justify-content:center;">${esc(data.caller.first_name || '') + ' ' + esc(data.caller.last_name || '')}${badgeHtml}</div>`;
         document.getElementById('incomingCallType').textContent = data.isVideo ? '📹 Incoming Video Call' : '📞 Incoming Voice Call';
         document.getElementById('callOverlay').classList.add('active');
         
@@ -1318,7 +1319,8 @@
             document.getElementById('loadingIndicator').remove();
             
             if (msgs.length === 0) {
-                msgsArea.innerHTML += `<div style="text-align:center; color:rgba(255,255,255,0.3); font-size:13px; margin:20px;">Start of your secure conversation with ${esc(partner.first_name)}</div>`;
+                const badgeHtml = partner.is_verified ? `<span class="verified-badge" style="margin-left:4px" title=""><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="#1d9bf0"/><path d="M9.5 16.5l-3-3 1.4-1.4 1.6 1.6 5.6-5.6 1.4 1.4z" fill="#fff"/></svg><span class="badge-tooltip">Verified Account</span></span>` : '';
+                msgsArea.innerHTML += `<div style="text-align:center; color:rgba(255,255,255,0.3); font-size:13px; margin:20px; display:flex; align-items:center; justify-content:center;">Start of your secure conversation with ${esc(partner.first_name)}${badgeHtml}</div>`;
             } else {
                 let lastSeenMsgId = null;
                 let lastRecvMsgId = null;
@@ -1594,6 +1596,10 @@
                     partner.is_verified = data.is_verified;
                     sessionStorage.setItem('chatPartner', JSON.stringify(partner));
                     setPartnerNameWithBadge();
+                }
+                if (data.uid === me.uid) {
+                    me.is_verified = data.is_verified;
+                    localStorage.setItem('chet_user', JSON.stringify(me));
                 }
             });
         };

@@ -248,7 +248,7 @@ app.post('/api/auth/register', async (req, res) => {
         });
         const token = jwt.sign({ uid, username: username.toLowerCase() }, JWT_SECRET, { expiresIn: '30d' });
         console.log(`[AUTH] Registered uid=${uid} username=${username}`);
-        res.json({ token, uid, username: username.toLowerCase(), first_name: first_name.trim(), last_name: last_name.trim() });
+        res.json({ token, uid, username: username.toLowerCase(), first_name: first_name.trim(), last_name: last_name.trim(), is_verified: false });
     } catch (e) {
         if (e.message?.includes('UNIQUE') || e.message?.includes('SQLITE_CONSTRAINT')) {
             res.status(409).json({ error: 'Username or email is already taken' });
@@ -276,7 +276,7 @@ app.post('/api/auth/login', async (req, res) => {
         if (!valid) return res.status(401).json({ error: 'Invalid email/username or password' });
         const token = jwt.sign({ uid: user.uid, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
         console.log(`[AUTH] Login uid=${user.uid}`);
-        res.json({ token, uid: user.uid, username: user.username, first_name: user.first_name, last_name: user.last_name, profile_photo: user.profile_photo });
+        res.json({ token, uid: user.uid, username: user.username, first_name: user.first_name, last_name: user.last_name, profile_photo: user.profile_photo, is_verified: user.is_verified === 1 || user.is_verified === true });
     } catch (e) {
         console.error('[AUTH] Login error:', e.message);
         res.status(500).json({ error: 'Login failed. Please try again.' });
@@ -288,11 +288,13 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
     try {
         const result = await db.execute({
-            sql: `SELECT uid, username, first_name, last_name, email, created_at, profile_photo FROM users WHERE uid = ? LIMIT 1`,
+            sql: `SELECT uid, username, first_name, last_name, email, created_at, profile_photo, is_verified FROM users WHERE uid = ? LIMIT 1`,
             args: [req.user.uid]
         });
         if (!result.rows.length) return res.status(404).json({ error: 'User not found' });
-        res.json(result.rows[0]);
+        const user = result.rows[0];
+        user.is_verified = user.is_verified === 1 || user.is_verified === true;
+        res.json(user);
     } catch (e) {
         res.status(500).json({ error: 'Failed to load profile' });
     }

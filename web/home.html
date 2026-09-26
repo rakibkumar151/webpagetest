@@ -511,6 +511,11 @@ function initials(u) {
     return parts.map(p => p[0].toUpperCase()).join('') || (u.username || '?')[0].toUpperCase();
 }
 
+function getBadgeHtml() {
+    return `<span class="verified-badge" style="margin-left:4px" title=""><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="#1d9bf0"/><path d="M9.5 16.5l-3-3 1.4-1.4 1.6 1.6 5.6-5.6 1.4 1.4z" fill="#fff"/></svg><span class="badge-tooltip">Verified Account</span></span>`;
+}
+
+
 function getColor(uid) {
     const colors = [
         ['#7c6cff','#a855f7'], ['#06b6d4','#7c6cff'],
@@ -547,9 +552,10 @@ function initProfile() {
         if (img) img.remove();
     }
     
-    document.getElementById('navName').textContent = me.first_name || me.username;
+    const badge = me.is_verified ? getBadgeHtml() : '';
+    document.getElementById('navName').innerHTML = `<span style="display:flex;align-items:center;">${esc(me.first_name || me.username)}${badge}</span>`;
     document.getElementById('profileAvatar').style.background = getColor(me.uid);
-    document.getElementById('profileName').textContent = (me.first_name || '') + ' ' + (me.last_name || '');
+    document.getElementById('profileName').innerHTML = `<span style="display:flex;align-items:center;justify-content:center;">${esc((me.first_name || '') + ' ' + (me.last_name || ''))}${badge}</span>`;
     document.getElementById('profileUsername').textContent = '@' + me.username;
     document.getElementById('uidText').textContent = me.uid;
     document.getElementById('profileCard').style.display = 'flex';
@@ -831,6 +837,11 @@ loadUsers().then(() => {
                     }
                 }
             }
+            if (data.uid === me.uid) {
+                me.is_verified = data.is_verified;
+                localStorage.setItem('chet_user', JSON.stringify(me));
+                initProfile(); // Refresh my profile badge
+            }
         });
 
         // ── Incoming Call on Home Page ──
@@ -849,7 +860,8 @@ loadUsers().then(() => {
                 document.getElementById('incomingCallAvatar').style.background = getColor(data.caller.uid);
             }
             
-            document.getElementById('incomingCallName').textContent = (data.caller.first_name||'') + ' ' + (data.caller.last_name||'');
+            const callerBadge = data.caller.is_verified ? getBadgeHtml() : '';
+            document.getElementById('incomingCallName').innerHTML = `<div style="display:flex;align-items:center;justify-content:center;">${esc(data.caller.first_name||'') + ' ' + esc(data.caller.last_name||'')}${callerBadge}</div>`;
             document.getElementById('incomingCallType').textContent = data.isVideo ? '📹 Incoming Video Call' : '📞 Incoming Voice Call';
             document.getElementById('callOverlay').classList.add('active');
             const fill = document.getElementById('callTimerFill');
