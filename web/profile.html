@@ -687,6 +687,10 @@
                 <img id="cropperImage" src="" style="display:block;max-width:100%;">
             </div>
             <div class="crop-actions">
+                <div style="flex:1; display:flex; gap:8px;">
+                    <button class="btn-cancel" onclick="if(cropperInstance) cropperInstance.zoom(0.1)" title="Zoom In" style="padding: 8px 12px;">Zoom +</button>
+                    <button class="btn-cancel" onclick="if(cropperInstance) cropperInstance.zoom(-0.1)" title="Zoom Out" style="padding: 8px 12px;">Zoom -</button>
+                </div>
                 <button class="btn-cancel" onclick="closeCropper()">Cancel</button>
                 <button class="btn-save" onclick="saveCroppedImage()">Crop & Save</button>
             </div>
