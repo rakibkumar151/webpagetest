@@ -699,6 +699,36 @@ function stopScreenSharing() {
     }
 }
 
+function saveCallLogToDB(status, duration) {
+    try {
+        const savedCallData = JSON.parse(sessionStorage.getItem('activeCall') || '{}');
+        const isCaller = savedCallData.isCaller === true;
+        const pStr = sessionStorage.getItem('callPartner');
+        const token = localStorage.getItem('chet_token') || sessionStorage.getItem('chet_token');
+        if (pStr && token) {
+            const p = JSON.parse(pStr);
+            const API = window.APP_CONFIG?.SIGNALING_URL || window.location.origin;
+            if (isCaller) {
+                fetch(`${API}/api/messages`, {
+                    method: 'POST',
+                    keepalive: true,
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({
+                        to_uid: p.uid,
+                        text: JSON.stringify({
+                            type: 'call_log',
+                            status: status,
+                            duration: duration || 0
+                        })
+                    })
+                }).catch(()=>{});
+            } else {
+                sessionStorage.setItem('pendingCallLog', JSON.stringify({ status, duration }));
+            }
+        }
+    } catch(e) {}
+}
+
 function cleanupCall(isManual = false) {
     log('cleanupCall isManual=' + isManual);
     if (isManual) {
@@ -711,39 +741,8 @@ function cleanupCall(isManual = false) {
     // ── Save call log (both caller AND callee save their own copy) ────────────────
     if (currentCallId && !manualHangup_logSaved) {
         manualHangup_logSaved = true;
-        try {
-            const savedCallData = JSON.parse(sessionStorage.getItem('activeCall') || '{}');
-            const pStr = sessionStorage.getItem('callPartner');
-            const token = localStorage.getItem('chet_token') || sessionStorage.getItem('chet_token');
-            if (pStr && token) {
-                const p = JSON.parse(pStr);
-                const API = window.APP_CONFIG?.SIGNALING_URL || window.location.origin;
-                const status = secondsConnected > 0 ? 'ended' : 'missed';
-                const isCaller = savedCallData.isCaller === true;
-                // Only the caller saves to DB to avoid duplicate messages
-                // But store locally for callee too via pendingCallLog
-                if (isCaller) {
-                    fetch(`${API}/api/messages`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                        body: JSON.stringify({
-                            to_uid: p.uid,
-                            text: JSON.stringify({
-                                type: 'call_log',
-                                status: status,
-                                duration: secondsConnected
-                            })
-                        })
-                    }).catch(()=>{});
-                } else {
-                    // Callee: store locally to show in chat on return
-                    sessionStorage.setItem('pendingCallLog', JSON.stringify({
-                        status: status,
-                        duration: secondsConnected
-                    }));
-                }
-            }
-        } catch(e) {}
+        const status = secondsConnected > 0 ? 'ended' : 'missed';
+        saveCallLogToDB(status, secondsConnected);
     }
 
     RecoveryManager.reset();
@@ -916,7 +915,7 @@ socket.on('connect', () => {
 // ─── CALL REJECTED BY CALLEE ──────────────────────────────────────────────────
 socket.on('call_rejected', () => {
     log('[CALL] Call was rejected by callee');
-    sessionStorage.setItem('pendingCallLog', JSON.stringify({ status: 'rejected', duration: 0 }));
+    saveCallLogToDB('rejected', 0);
     sessionStorage.removeItem('activeCall');
     manualHangup = true;
     manualHangup_logSaved = true; // already saving as rejected
@@ -937,7 +936,7 @@ socket.on('call_rejected', () => {
 // ─── CALL MISSED (no answer) ───────────────────────────────────────────────────
 socket.on('call_missed', () => {
     log('[CALL] Call timed out — no answer');
-    sessionStorage.setItem('pendingCallLog', JSON.stringify({ status: 'missed', duration: 0 }));
+    saveCallLogToDB('missed', 0);
     sessionStorage.removeItem('activeCall');
     manualHangup = true;
     manualHangup_logSaved = true;
@@ -1121,7 +1120,13 @@ window.addEventListener('load', async () => {
 
         updateTimerDisplay();
         switchScreen('call');
-        changeAppState('CONNECTED', 'Connected');
+        
+        // If this is a brand new outgoing call (seconds=0, isCaller=true), start in CONNECTING (Calling...) state.
+        // The WebRTC ICE connection will transition it to CONNECTED when the callee actually answers.
+        const isNewOutgoing = (data.isCaller === true && data.secondsConnected === 0);
+        const initialState = isNewOutgoing ? 'CONNECTING' : 'CONNECTED';
+        changeAppState(initialState, isNewOutgoing ? 'Calling...' : 'Connected');
+        
         hangupBtn.disabled = false;
         joinBtn.disabled   = true;
 
@@ -1222,7 +1227,7 @@ window.addEventListener('load', async () => {
                     }
                     // Save missed log
                     manualHangup_logSaved = true;
-                    sessionStorage.setItem('pendingCallLog', JSON.stringify({ status: 'missed', duration: 0 }));
+                    saveCallLogToDB('missed', 0);
                     sessionStorage.removeItem('activeCall');
                     if (pc) { pc.close(); pc = null; }
                     if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
