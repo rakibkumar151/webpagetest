@@ -142,14 +142,31 @@
         .msg-row.sent { justify-content: flex-end; }
         .msg-row.recv { justify-content: flex-start; }
 
-        .msg-bubble {
+        .msg-content-wrapper {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-end;
             max-width: 75%;
+        }
+
+        .msg-bubble-wrapper {
+            display: flex;
+            flex-direction: column;
+            max-width: 100%;
+            min-width: 0;
+        }
+        .msg-row.sent .msg-bubble-wrapper { align-items: flex-end; }
+        .msg-row.recv .msg-bubble-wrapper { align-items: flex-start; }
+
+        .msg-bubble {
+            width: fit-content;
+            max-width: 100%;
             padding: 10px 16px;
             border-radius: 20px;
             font-size: 14.5px;
             line-height: 1.4;
-            overflow-wrap: break-word;
-            word-wrap: break-word;
+            word-break: normal;
+            overflow-wrap: anywhere;
             white-space: pre-wrap;
             position: relative;
         }
@@ -593,9 +610,9 @@
         }
 
         row.innerHTML = `
-            <div id="msg-${msg.id}" style="display:flex; flex-direction:row; align-items:flex-end;">
+            <div id="msg-${msg.id}" class="msg-content-wrapper">
                 ${avatarHtml}
-                <div style="display:flex; flex-direction:column;">
+                <div class="msg-bubble-wrapper">
                     <div class="msg-bubble" style="${payload.type === 'call_log' ? 'padding: 12px; ' : ''}${payload.type === 'call_log' && isMe ? 'background: var(--msg-recv) !important; color: var(--text) !important;' : ''}">${contentHtml}</div>
                     ${payload.type === 'call_log' ? '' : `<div class="msg-time">${formatTime(msg.created_at)}</div>`}
                 </div>

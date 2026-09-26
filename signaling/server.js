@@ -153,7 +153,7 @@ app.post('/api/calls/initiate', authMiddleware, (req, res) => {
 
 
 // ─── TURN CREDENTIALS ────────────────────────────────────────────────────────
-app.get('/api/turn-credentials', authMiddleware, (req, res) => {
+app.get('/api/turn-credentials', (req, res) => {
     res.set('Cache-Control', 'no-store');
     if (!TURN_SECRET || !TURN_HOST) return res.status(503).json({ error: 'TURN service unavailable' });
     const currentTimestamp = Math.floor(Date.now() / 1000);

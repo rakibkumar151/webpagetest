@@ -14,6 +14,7 @@
     "cors": "^2.8.6",
     "express-rate-limit": "^8.7.0",
     "node-turn": "^0.0.6",
-    "playwright": "^1.63.0"
+    "playwright": "^1.63.0",
+    "puppeteer": "^25.12.0"
   }
 }
