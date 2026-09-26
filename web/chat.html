@@ -482,7 +482,7 @@
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
         </button>
         <!-- Theme / Info -->
-        <button class="header-icon-btn" onclick="toggleThemeModal()" title="Change Theme">
+        <button class="header-icon-btn" onclick="toggleThemeModal(event)" title="Change Theme">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
         </button>
         
@@ -490,11 +490,11 @@
         <div class="theme-modal" id="themeModal">
             <div class="theme-title">Customize Chat Theme</div>
             <div class="theme-options">
-                <button class="theme-btn" style="background: linear-gradient(135deg, #7c6cff, #a855f7)" onclick="setTheme('#7c6cff', '#a855f7')"></button>
-                <button class="theme-btn" style="background: linear-gradient(135deg, #06b6d4, #3b82f6)" onclick="setTheme('#06b6d4', '#3b82f6')"></button>
-                <button class="theme-btn" style="background: linear-gradient(135deg, #f43f5e, #ec4899)" onclick="setTheme('#f43f5e', '#ec4899')"></button>
-                <button class="theme-btn" style="background: linear-gradient(135deg, #10b981, #059669)" onclick="setTheme('#10b981', '#059669')"></button>
-                <button class="theme-btn" style="background: linear-gradient(135deg, #f59e0b, #ea580c)" onclick="setTheme('#f59e0b', '#ea580c')"></button>
+                <button class="theme-btn" style="background: linear-gradient(135deg, #7c6cff, #a855f7)" onclick="setTheme('#7c6cff', '#a855f7', true)"></button>
+                <button class="theme-btn" style="background: linear-gradient(135deg, #06b6d4, #3b82f6)" onclick="setTheme('#06b6d4', '#3b82f6', true)"></button>
+                <button class="theme-btn" style="background: linear-gradient(135deg, #f43f5e, #ec4899)" onclick="setTheme('#f43f5e', '#ec4899', true)"></button>
+                <button class="theme-btn" style="background: linear-gradient(135deg, #10b981, #059669)" onclick="setTheme('#10b981', '#059669', true)"></button>
+                <button class="theme-btn" style="background: linear-gradient(135deg, #f59e0b, #ea580c)" onclick="setTheme('#f59e0b', '#ea580c', true)"></button>
             </div>
         </div>
     </div>
@@ -931,22 +931,25 @@
         window.location.href = 'index.html';
     }
 
-    function toggleThemeModal() {
+    function toggleThemeModal(e) {
+        if (e) e.stopPropagation();
         document.getElementById('themeModal').classList.toggle('active');
     }
 
-    function setTheme(color1, color2) {
+    function setTheme(color1, color2, closeModal = false) {
         document.documentElement.style.setProperty('--accent1', color1);
         document.documentElement.style.setProperty('--accent2', color2);
         document.documentElement.style.setProperty('--msg-sent', `linear-gradient(135deg, ${color1}, ${color2})`);
         localStorage.setItem('chat_theme_' + partner.uid, JSON.stringify({c1: color1, c2: color2}));
-        toggleThemeModal();
+        if (closeModal) {
+            document.getElementById('themeModal').classList.remove('active');
+        }
     }
 
-    // Load saved theme
+    // Load saved theme silently on load
     try {
         const savedTheme = JSON.parse(localStorage.getItem('chat_theme_' + partner.uid));
-        if (savedTheme) setTheme(savedTheme.c1, savedTheme.c2);
+        if (savedTheme) setTheme(savedTheme.c1, savedTheme.c2, false);
     } catch(e){}
 
     document.addEventListener('click', (e) => {
