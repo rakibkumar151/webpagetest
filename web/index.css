@@ -400,25 +400,24 @@ body:has(#callScreen.active) {
 }
 
 .remote-video-off.hidden, .local-video-off.hidden, .remote-mic-off.hidden { display: none !important; }
-. v e r i f i e d - b a d g e   { 
-         d i s p l a y :   i n l i n e - f l e x ;   a l i g n - i t e m s :   c e n t e r ;   j u s t i f y - c o n t e n t :   c e n t e r ; 
-         w i d t h :   1 6 p x ;   h e i g h t :   1 6 p x ;   m a r g i n - l e f t :   4 p x ; 
-         c u r s o r :   d e f a u l t ;   p o s i t i o n :   r e l a t i v e ;   v e r t i c a l - a l i g n :   m i d d l e ;   f l e x - s h r i n k :   0 ; 
- } 
- . v e r i f i e d - b a d g e   s v g   {   w i d t h :   1 6 p x ;   h e i g h t :   1 6 p x ;   } 
- . v e r i f i e d - b a d g e   . b a d g e - t o o l t i p   { 
-         p o s i t i o n :   a b s o l u t e ;   b o t t o m :   c a l c ( 1 0 0 %   +   8 p x ) ;   l e f t :   5 0 % ; 
-         t r a n s f o r m :   t r a n s l a t e X ( - 5 0 % )   s c a l e ( 0 . 9 ) ; 
-         b a c k g r o u n d :   r g b a ( 2 0 , 2 0 , 3 0 , 0 . 9 7 ) ;   c o l o r :   # f f f ; 
-         f o n t - s i z e :   1 1 p x ;   f o n t - w e i g h t :   5 0 0 ;   w h i t e - s p a c e :   n o w r a p ; 
-         p a d d i n g :   5 p x   1 0 p x ;   b o r d e r - r a d i u s :   8 p x ; 
-         p o i n t e r - e v e n t s :   n o n e ;   o p a c i t y :   0 ; 
-         t r a n s i t i o n :   o p a c i t y   0 . 1 5 s ,   t r a n s f o r m   0 . 1 5 s ; 
-         b o x - s h a d o w :   0   4 p x   1 2 p x   r g b a ( 0 , 0 , 0 , 0 . 5 ) ; 
-         b o r d e r :   1 p x   s o l i d   r g b a ( 2 5 5 , 2 5 5 , 2 5 5 , 0 . 0 8 ) ; 
-         z - i n d e x :   9 9 ; 
- } 
- . v e r i f i e d - b a d g e : h o v e r   . b a d g e - t o o l t i p   { 
-         o p a c i t y :   1 ;   t r a n s f o r m :   t r a n s l a t e X ( - 5 0 % )   s c a l e ( 1 ) ; 
- }  
- 
+.verified-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; margin-left: 4px;
+    cursor: default; position: relative; vertical-align: middle; flex-shrink: 0;
+}
+.verified-badge svg { width: 16px; height: 16px; }
+.verified-badge .badge-tooltip {
+    position: absolute; bottom: calc(100% + 8px); left: 50%;
+    transform: translateX(-50%) scale(0.9);
+    background: rgba(20,20,30,0.97); color: #fff;
+    font-size: 11px; font-weight: 500; white-space: nowrap;
+    padding: 5px 10px; border-radius: 8px;
+    pointer-events: none; opacity: 0;
+    transition: opacity 0.15s, transform 0.15s;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.08);
+    z-index: 99;
+}
+.verified-badge:hover .badge-tooltip {
+    opacity: 1; transform: translateX(-50%) scale(1);
+}
