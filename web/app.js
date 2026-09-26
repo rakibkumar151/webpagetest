@@ -765,6 +765,7 @@ socket.on('connect', () => {
             log('[RECOVERY] Session resumed');
             if (!pc) {
                 log('[RECOVERY] PC is null. Requesting peer rebuild and setting up local WebRTC.');
+                polite = true; // Always polite when requesting rebuild
                 socket.emit('peer_action', { callId: currentCallId, action: 'rebuild_webrtc' });
                 setupWebRTC();
             }
@@ -828,7 +829,17 @@ socket.on('offer', async ({ description }) => {
         if (ignoreOffer) { log('Offer collision — ignored (impolite)'); return; }
 
         isSettingRemoteAnswerPending = description.type === 'answer';
-        await pc.setRemoteDescription(description);
+        
+        if (collision) {
+            log('Collision resolved via rollback');
+            await Promise.all([
+                pc.setLocalDescription({ type: 'rollback' }),
+                pc.setRemoteDescription(description)
+            ]);
+        } else {
+            await pc.setRemoteDescription(description);
+        }
+        
         isSettingRemoteAnswerPending = false;
         log('Remote description set type=' + description.type);
 
@@ -945,6 +956,7 @@ window.addEventListener('load', async () => {
                 socket.emit('resume_call', { callId: currentCallId, sessionId }, (res) => {
                     if (res && res.status === 'resume_ok') {
                         log('[RECOVERY] Session resumed on reload');
+                        polite = true; // Reloading peer is always polite
                         if (!pc) {
                             socket.emit('peer_action', { callId: currentCallId, action: 'rebuild_webrtc' });
                             setupWebRTC();
