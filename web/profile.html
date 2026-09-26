@@ -1405,7 +1405,18 @@
             document.head.appendChild(s);
         }
 
-        // Init
+        // Init — render instantly from cache/local if available
+        if (isOwnProfile && myUser && myUser.uid) {
+            renderProfile(myUser);
+        } else if (!isOwnProfile) {
+            try {
+                const cached = JSON.parse(sessionStorage.getItem('viewProfileCache') || 'null');
+                if (cached && cached.uid === profileUid) {
+                    renderProfile(cached);
+                }
+            } catch(e) {}
+        }
+
         loadProfileData();
         initSockets();
     </script>
