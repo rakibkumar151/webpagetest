@@ -22,6 +22,7 @@ const hangupBtn         = document.getElementById('hangupBtn');
 const muteBtn           = document.getElementById('muteBtn');
 const videoBtn          = document.getElementById('videoBtn');
 const switchCameraBtn   = document.getElementById('switchCameraBtn');
+const screenShareBtn    = document.getElementById('screenShareBtn');
 const statusSpan        = document.getElementById('status');
 const statusIndicator   = document.getElementById('statusIndicator');
 const callTimer         = document.getElementById('callTimer');
@@ -48,6 +49,8 @@ let manualHangup = false;
 let isMuted    = false;
 let isVideoMuted = false;
 let currentFacingMode = 'user';
+let isScreenSharing = false;
+let screenStream = null;
 
 let timerInterval    = null;
 let secondsConnected = 0;
@@ -292,6 +295,11 @@ joinBtn.addEventListener('click', async () => {
                 
                 videoBtn.disabled = false;
                 switchCameraBtn.disabled = true; // No video initially
+                
+                // Hide Screen Share button if unsupported (e.g. mobile)
+                if (!navigator.mediaDevices.getDisplayMedia) {
+                    screenShareBtn.style.display = 'none';
+                }
             } catch (err) {
                 log('Camera not available or blocked, falling back to audio only', err.message);
                 // Fallback to Audio only
@@ -470,6 +478,88 @@ switchCameraBtn.addEventListener('click', async () => {
     }
 });
 
+// ─── SCREEN SHARE ─────────────────────────────────────────────────────────────
+screenShareBtn.addEventListener('click', async () => {
+    if (!localStream) return;
+    
+    if (isScreenSharing) {
+        stopScreenSharing();
+    } else {
+        try {
+            screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+            const screenTrack = screenStream.getVideoTracks()[0];
+            
+            // Listen for native "Stop sharing" button
+            screenTrack.onended = () => {
+                stopScreenSharing();
+            };
+            
+            if (pc) {
+                const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                if (sender) {
+                    await sender.replaceTrack(screenTrack);
+                } else {
+                    pc.addTrack(screenTrack, localStream);
+                }
+            }
+            
+            // Show it in PIP box
+            const tempStream = new MediaStream([screenTrack]);
+            localVideo.srcObject = tempStream;
+            localVideo.classList.add('pip-active');
+            
+            const localContainer = document.querySelector('.local-video-container');
+            if (localContainer) localContainer.style.display = 'block';
+            
+            const localVideoStatus = document.getElementById('localVideoStatus');
+            if (localVideoStatus) localVideoStatus.classList.add('hidden');
+            
+            isScreenSharing = true;
+            screenShareBtn.classList.add('active');
+            
+            // If camera was on, turn it off visually
+            if (!isVideoMuted) {
+                const camTrack = localStream.getVideoTracks()[0];
+                if (camTrack) {
+                    camTrack.stop();
+                    localStream.removeTrack(camTrack);
+                }
+                isVideoMuted = true;
+                videoBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+            }
+            
+            if (currentCallId) {
+                socket.emit('peer_action', { callId: currentCallId, action: 'mute_video', muted: false });
+            }
+            switchCameraBtn.disabled = true; // Can't switch camera while sharing screen
+        } catch (e) {
+            log('Screen share failed', e.message);
+        }
+    }
+});
+
+function stopScreenSharing() {
+    if (!isScreenSharing) return;
+    
+    if (screenStream) {
+        screenStream.getTracks().forEach(t => t.stop());
+        screenStream = null;
+    }
+    
+    isScreenSharing = false;
+    screenShareBtn.classList.remove('active');
+    
+    // We revert to Camera OFF state. 
+    const localContainer = document.querySelector('.local-video-container');
+    if (localContainer) localContainer.style.display = 'none';
+    
+    localVideo.srcObject = localStream; // Back to localStream (which has no video track right now)
+    
+    if (currentCallId) {
+        socket.emit('peer_action', { callId: currentCallId, action: 'mute_video', muted: true });
+    }
+}
+
 // ─── CLEANUP ──────────────────────────────────────────────────────────────────
 function cleanupCall(isManual = false) {
     log('cleanupCall isManual=' + isManual);
@@ -514,6 +604,16 @@ function cleanupCall(isManual = false) {
     joinBtn.disabled   = false;
     hangupBtn.disabled = true;
     if (remoteVideo) remoteVideo.srcObject = null;
+    
+    if (screenStream) {
+        screenStream.getTracks().forEach(t => t.stop());
+        screenStream = null;
+    }
+    isScreenSharing = false;
+    if (screenShareBtn) {
+        screenShareBtn.classList.remove('active');
+        screenShareBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>`;
+    }
     
     const remoteVideoStatus = document.getElementById('remoteVideoStatus');
     const remoteMicStatus = document.getElementById('remoteMicStatus');
