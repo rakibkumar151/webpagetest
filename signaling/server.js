@@ -99,9 +99,55 @@ if (TURSO_URL && TURSO_TOKEN) {
             try { await db.execute(`ALTER TABLE messages ADD COLUMN read_at TEXT DEFAULT NULL`); } catch(e) {}
             try { await db.execute(`ALTER TABLE messages ADD COLUMN reactions TEXT DEFAULT NULL`); } catch(e) {}
             try { await db.execute(`ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0`); } catch(e) {}
+
+            // Create verified_uids table — paneer edits this directly in Turso dashboard
+            await db.execute(`
+                CREATE TABLE IF NOT EXISTS verified_uids (
+                    uid        TEXT PRIMARY KEY,
+                    added_at   TEXT DEFAULT (datetime('now'))
+                )
+            `);
             
             dbReady = true;
             console.log('[DB] Turso connected and tables ready');
+
+            // ── Auto-sync verified badges every 30 seconds ──────────────────
+            // Reads verified_uids table → syncs is_verified on users table
+            // Broadcasts user_verified socket event for any change
+            let lastVerifiedSnapshot = new Set();
+
+            async function syncVerifiedBadges() {
+                if (!db) return;
+                try {
+                    const res = await db.execute(`SELECT uid FROM verified_uids`);
+                    const currentSet = new Set(res.rows.map(r => r.uid));
+
+                    // Find newly verified UIDs
+                    for (const uid of currentSet) {
+                        if (!lastVerifiedSnapshot.has(uid)) {
+                            await db.execute({ sql: `UPDATE users SET is_verified = 1 WHERE uid = ?`, args: [uid] });
+                            if (io) io.emit('user_verified', { uid, is_verified: true });
+                            console.log(`[VERIFY] Badge granted: ${uid}`);
+                        }
+                    }
+                    // Find UIDs that were removed
+                    for (const uid of lastVerifiedSnapshot) {
+                        if (!currentSet.has(uid)) {
+                            await db.execute({ sql: `UPDATE users SET is_verified = 0 WHERE uid = ?`, args: [uid] });
+                            if (io) io.emit('user_verified', { uid, is_verified: false });
+                            console.log(`[VERIFY] Badge revoked: ${uid}`);
+                        }
+                    }
+                    lastVerifiedSnapshot = currentSet;
+                } catch(e) {
+                    console.error('[VERIFY] Sync error:', e.message);
+                }
+            }
+
+            // Initial sync on startup, then every 30s
+            setTimeout(syncVerifiedBadges, 3000);
+            setInterval(syncVerifiedBadges, 30000);
+
         } catch (e) {
             dbError = e.message;
             console.error('[DB] Init error:', e.message);
