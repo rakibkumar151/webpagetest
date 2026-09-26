@@ -487,6 +487,77 @@
             cursor: pointer;
         }
 
+        /* Location Autocomplete */
+        .location-autocomplete {
+            position: relative;
+        }
+
+        .location-autocomplete input {
+            width: 100%;
+        }
+
+        .location-dropdown {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: #1a2235;
+            border: 1px solid var(--border-hover);
+            border-radius: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 200;
+            display: none;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .location-dropdown.open {
+            display: block;
+            animation: dropFadeIn 0.15s ease;
+        }
+
+        @keyframes dropFadeIn {
+            from { opacity: 0; transform: translateY(-6px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .location-dropdown::-webkit-scrollbar {
+            width: 4px;
+        }
+        .location-dropdown::-webkit-scrollbar-track { background: transparent; }
+        .location-dropdown::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+
+        .location-item {
+            padding: 10px 14px;
+            font-size: 14px;
+            color: var(--text);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.12s;
+        }
+
+        .location-item:hover, .location-item.active {
+            background: rgba(124, 108, 255, 0.15);
+        }
+
+        .location-item .loc-flag {
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .location-item .loc-name {
+            flex: 1;
+        }
+
+        .location-no-results {
+            padding: 14px;
+            text-align: center;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
         /* Toast */
         .toast {
             position: fixed;
@@ -629,7 +700,10 @@
             </div>
             <div class="form-group">
                 <label>Location</label>
-                <input type="text" id="inputLocation" placeholder="e.g. Dhaka, Bangladesh">
+                <div class="location-autocomplete" id="locationAutocomplete">
+                    <input type="text" id="inputLocation" placeholder="Search country or city..." autocomplete="off" oninput="filterLocations(this.value)" onfocus="filterLocations(this.value)">
+                    <div class="location-dropdown" id="locationDropdown"></div>
+                </div>
             </div>
 
             <div class="form-group">
@@ -658,6 +732,132 @@
         const API = (window.APP_CONFIG && window.APP_CONFIG.SIGNALING_URL) || window.location.origin;
         const token = localStorage.getItem('chet_token');
         let myUser = JSON.parse(localStorage.getItem('chet_user') || '{}');
+
+        // ─── Country Autocomplete Data ────────────────────────────────────────
+        const COUNTRIES = [
+            {f:'🇦🇫',n:'Afghanistan'},{f:'🇦🇱',n:'Albania'},{f:'🇩🇿',n:'Algeria'},{f:'🇦🇩',n:'Andorra'},
+            {f:'🇦🇴',n:'Angola'},{f:'🇦🇬',n:'Antigua and Barbuda'},{f:'🇦🇷',n:'Argentina'},{f:'🇦🇲',n:'Armenia'},
+            {f:'🇦🇺',n:'Australia'},{f:'🇦🇹',n:'Austria'},{f:'🇦🇿',n:'Azerbaijan'},{f:'🇧🇸',n:'Bahamas'},
+            {f:'🇧🇭',n:'Bahrain'},{f:'🇧🇩',n:'Bangladesh'},{f:'🇧🇧',n:'Barbados'},{f:'🇧🇾',n:'Belarus'},
+            {f:'🇧🇪',n:'Belgium'},{f:'🇧🇿',n:'Belize'},{f:'🇧🇯',n:'Benin'},{f:'🇧🇹',n:'Bhutan'},
+            {f:'🇧🇴',n:'Bolivia'},{f:'🇧🇦',n:'Bosnia and Herzegovina'},{f:'🇧🇼',n:'Botswana'},{f:'🇧🇷',n:'Brazil'},
+            {f:'🇧🇳',n:'Brunei'},{f:'🇧🇬',n:'Bulgaria'},{f:'🇧🇫',n:'Burkina Faso'},{f:'🇧🇮',n:'Burundi'},
+            {f:'🇨🇻',n:'Cabo Verde'},{f:'🇰🇭',n:'Cambodia'},{f:'🇨🇲',n:'Cameroon'},{f:'🇨🇦',n:'Canada'},
+            {f:'🇨🇫',n:'Central African Republic'},{f:'🇹🇩',n:'Chad'},{f:'🇨🇱',n:'Chile'},{f:'🇨🇳',n:'China'},
+            {f:'🇨🇴',n:'Colombia'},{f:'🇰🇲',n:'Comoros'},{f:'🇨🇬',n:'Congo'},{f:'🇨🇷',n:'Costa Rica'},
+            {f:'🇭🇷',n:'Croatia'},{f:'🇨🇺',n:'Cuba'},{f:'🇨🇾',n:'Cyprus'},{f:'🇨🇿',n:'Czech Republic'},
+            {f:'🇩🇰',n:'Denmark'},{f:'🇩🇯',n:'Djibouti'},{f:'🇩🇲',n:'Dominica'},{f:'🇩🇴',n:'Dominican Republic'},
+            {f:'🇪🇨',n:'Ecuador'},{f:'🇪🇬',n:'Egypt'},{f:'🇸🇻',n:'El Salvador'},{f:'🇬🇶',n:'Equatorial Guinea'},
+            {f:'🇪🇷',n:'Eritrea'},{f:'🇪🇪',n:'Estonia'},{f:'🇸🇿',n:'Eswatini'},{f:'🇪🇹',n:'Ethiopia'},
+            {f:'🇫🇯',n:'Fiji'},{f:'🇫🇮',n:'Finland'},{f:'🇫🇷',n:'France'},{f:'🇬🇦',n:'Gabon'},
+            {f:'🇬🇲',n:'Gambia'},{f:'🇬🇪',n:'Georgia'},{f:'🇩🇪',n:'Germany'},{f:'🇬🇭',n:'Ghana'},
+            {f:'🇬🇷',n:'Greece'},{f:'🇬🇩',n:'Grenada'},{f:'🇬🇹',n:'Guatemala'},{f:'🇬🇳',n:'Guinea'},
+            {f:'🇬🇼',n:'Guinea-Bissau'},{f:'🇬🇾',n:'Guyana'},{f:'🇭🇹',n:'Haiti'},{f:'🇭🇳',n:'Honduras'},
+            {f:'🇭🇺',n:'Hungary'},{f:'🇮🇸',n:'Iceland'},{f:'🇮🇳',n:'India'},{f:'🇮🇩',n:'Indonesia'},
+            {f:'🇮🇷',n:'Iran'},{f:'🇮🇶',n:'Iraq'},{f:'🇮🇪',n:'Ireland'},{f:'🇮🇱',n:'Israel'},
+            {f:'🇮🇹',n:'Italy'},{f:'🇯🇲',n:'Jamaica'},{f:'🇯🇵',n:'Japan'},{f:'🇯🇴',n:'Jordan'},
+            {f:'🇰🇿',n:'Kazakhstan'},{f:'🇰🇪',n:'Kenya'},{f:'🇰🇮',n:'Kiribati'},{f:'🇰🇼',n:'Kuwait'},
+            {f:'🇰🇬',n:'Kyrgyzstan'},{f:'🇱🇦',n:'Laos'},{f:'🇱🇻',n:'Latvia'},{f:'🇱🇧',n:'Lebanon'},
+            {f:'🇱🇸',n:'Lesotho'},{f:'🇱🇷',n:'Liberia'},{f:'🇱🇾',n:'Libya'},{f:'🇱🇮',n:'Liechtenstein'},
+            {f:'🇱🇹',n:'Lithuania'},{f:'🇱🇺',n:'Luxembourg'},{f:'🇲🇬',n:'Madagascar'},{f:'🇲🇼',n:'Malawi'},
+            {f:'🇲🇾',n:'Malaysia'},{f:'🇲🇻',n:'Maldives'},{f:'🇲🇱',n:'Mali'},{f:'🇲🇹',n:'Malta'},
+            {f:'🇲🇭',n:'Marshall Islands'},{f:'🇲🇷',n:'Mauritania'},{f:'🇲🇺',n:'Mauritius'},{f:'🇲🇽',n:'Mexico'},
+            {f:'🇫🇲',n:'Micronesia'},{f:'🇲🇩',n:'Moldova'},{f:'🇲🇨',n:'Monaco'},{f:'🇲🇳',n:'Mongolia'},
+            {f:'🇲🇪',n:'Montenegro'},{f:'🇲🇦',n:'Morocco'},{f:'🇲🇿',n:'Mozambique'},{f:'🇲🇲',n:'Myanmar'},
+            {f:'🇳🇦',n:'Namibia'},{f:'🇳🇷',n:'Nauru'},{f:'🇳🇵',n:'Nepal'},{f:'🇳🇱',n:'Netherlands'},
+            {f:'🇳🇿',n:'New Zealand'},{f:'🇳🇮',n:'Nicaragua'},{f:'🇳🇪',n:'Niger'},{f:'🇳🇬',n:'Nigeria'},
+            {f:'🇳🇴',n:'Norway'},{f:'🇴🇲',n:'Oman'},{f:'🇵🇰',n:'Pakistan'},{f:'🇵🇼',n:'Palau'},
+            {f:'🇵🇦',n:'Panama'},{f:'🇵🇬',n:'Papua New Guinea'},{f:'🇵🇾',n:'Paraguay'},{f:'🇵🇪',n:'Peru'},
+            {f:'🇵🇭',n:'Philippines'},{f:'🇵🇱',n:'Poland'},{f:'🇵🇹',n:'Portugal'},{f:'🇶🇦',n:'Qatar'},
+            {f:'🇷🇴',n:'Romania'},{f:'🇷🇺',n:'Russia'},{f:'🇷🇼',n:'Rwanda'},{f:'🇰🇳',n:'Saint Kitts and Nevis'},
+            {f:'🇱🇨',n:'Saint Lucia'},{f:'🇻🇨',n:'Saint Vincent and the Grenadines'},{f:'🇼🇸',n:'Samoa'},
+            {f:'🇸🇲',n:'San Marino'},{f:'🇸🇹',n:'São Tomé and Príncipe'},{f:'🇸🇦',n:'Saudi Arabia'},
+            {f:'🇸🇳',n:'Senegal'},{f:'🇷🇸',n:'Serbia'},{f:'🇸🇨',n:'Seychelles'},{f:'🇸🇱',n:'Sierra Leone'},
+            {f:'🇸🇬',n:'Singapore'},{f:'🇸🇰',n:'Slovakia'},{f:'🇸🇮',n:'Slovenia'},{f:'🇸🇧',n:'Solomon Islands'},
+            {f:'🇸🇴',n:'Somalia'},{f:'🇿🇦',n:'South Africa'},{f:'🇸🇸',n:'South Sudan'},{f:'🇪🇸',n:'Spain'},
+            {f:'🇱🇰',n:'Sri Lanka'},{f:'🇸🇩',n:'Sudan'},{f:'🇸🇷',n:'Suriname'},{f:'🇸🇪',n:'Sweden'},
+            {f:'🇨🇭',n:'Switzerland'},{f:'🇸🇾',n:'Syria'},{f:'🇹🇼',n:'Taiwan'},{f:'🇹🇯',n:'Tajikistan'},
+            {f:'🇹🇿',n:'Tanzania'},{f:'🇹🇭',n:'Thailand'},{f:'🇹🇱',n:'Timor-Leste'},{f:'🇹🇬',n:'Togo'},
+            {f:'🇹🇴',n:'Tonga'},{f:'🇹🇹',n:'Trinidad and Tobago'},{f:'🇹🇳',n:'Tunisia'},{f:'🇹🇷',n:'Turkey'},
+            {f:'🇹🇲',n:'Turkmenistan'},{f:'🇹🇻',n:'Tuvalu'},{f:'🇺🇬',n:'Uganda'},{f:'🇺🇦',n:'Ukraine'},
+            {f:'🇦🇪',n:'United Arab Emirates'},{f:'🇬🇧',n:'United Kingdom'},{f:'🇺🇸',n:'United States'},
+            {f:'🇺🇾',n:'Uruguay'},{f:'🇺🇿',n:'Uzbekistan'},{f:'🇻🇺',n:'Vanuatu'},{f:'🇻🇪',n:'Venezuela'},
+            {f:'🇻🇳',n:'Vietnam'},{f:'🇾🇪',n:'Yemen'},{f:'🇿🇲',n:'Zambia'},{f:'🇿🇼',n:'Zimbabwe'},
+            // Popular cities
+            {f:'🏙️',n:'Dhaka, Bangladesh'},{f:'🏙️',n:'Chittagong, Bangladesh'},{f:'🏙️',n:'Sylhet, Bangladesh'},
+            {f:'🏙️',n:'Rajshahi, Bangladesh'},{f:'🏙️',n:'Khulna, Bangladesh'},{f:'🏙️',n:'Barisal, Bangladesh'},
+            {f:'🏙️',n:'Delhi, India'},{f:'🏙️',n:'Mumbai, India'},{f:'🏙️',n:'Kolkata, India'},
+            {f:'🏙️',n:'New York, USA'},{f:'🏙️',n:'London, UK'},{f:'🏙️',n:'Dubai, UAE'},
+            {f:'🏙️',n:'Toronto, Canada'},{f:'🏙️',n:'Sydney, Australia'},{f:'🏙️',n:'Tokyo, Japan'},
+            {f:'🏙️',n:'Paris, France'},{f:'🏙️',n:'Berlin, Germany'},{f:'🏙️',n:'Singapore, Singapore'},
+            {f:'🏙️',n:'Karachi, Pakistan'},{f:'🏙️',n:'Lahore, Pakistan'},{f:'🏙️',n:'Islamabad, Pakistan'},
+            {f:'🏙️',n:'Kuala Lumpur, Malaysia'},{f:'🏙️',n:'Jakarta, Indonesia'},{f:'🏙️',n:'Bangkok, Thailand'}
+        ];
+
+        let activeLocIdx = -1;
+
+        function filterLocations(query) {
+            const drop = document.getElementById('locationDropdown');
+            const q = query.trim().toLowerCase();
+            if (!q) {
+                drop.classList.remove('open');
+                drop.innerHTML = '';
+                return;
+            }
+            const filtered = COUNTRIES.filter(c => c.n.toLowerCase().includes(q)).slice(0, 10);
+            if (!filtered.length) {
+                drop.innerHTML = '<div class="location-no-results">No results found</div>';
+                drop.classList.add('open');
+                return;
+            }
+            drop.innerHTML = filtered.map((c, i) =>
+                `<div class="location-item" data-idx="${i}" onmousedown="selectLocation('${c.n.replace(/'/g,"\\'")}')">
+                    <span class="loc-flag">${c.f}</span>
+                    <span class="loc-name">${c.n.replace(new RegExp(`(${q})`, 'gi'), '<strong>$1</strong>')}</span>
+                </div>`
+            ).join('');
+            drop.classList.add('open');
+            activeLocIdx = -1;
+        }
+
+        function selectLocation(name) {
+            document.getElementById('inputLocation').value = name;
+            document.getElementById('locationDropdown').classList.remove('open');
+            document.getElementById('locationDropdown').innerHTML = '';
+        }
+
+        // Close dropdown on outside click
+        document.addEventListener('click', function(e) {
+            if (!document.getElementById('locationAutocomplete')?.contains(e.target)) {
+                const drop = document.getElementById('locationDropdown');
+                if (drop) drop.classList.remove('open');
+            }
+        });
+
+        // Arrow key navigation in location dropdown
+        document.addEventListener('keydown', function(e) {
+            const input = document.getElementById('inputLocation');
+            const drop = document.getElementById('locationDropdown');
+            if (!drop || !drop.classList.contains('open')) return;
+            const items = drop.querySelectorAll('.location-item');
+            if (!items.length) return;
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                activeLocIdx = Math.min(activeLocIdx + 1, items.length - 1);
+                items.forEach((el, i) => el.classList.toggle('active', i === activeLocIdx));
+                items[activeLocIdx]?.scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                activeLocIdx = Math.max(activeLocIdx - 1, 0);
+                items.forEach((el, i) => el.classList.toggle('active', i === activeLocIdx));
+                items[activeLocIdx]?.scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'Enter' && activeLocIdx >= 0) {
+                e.preventDefault();
+                items[activeLocIdx]?.dispatchEvent(new MouseEvent('mousedown'));
+            } else if (e.key === 'Escape') {
+                drop.classList.remove('open');
+            }
+        });
 
         // Target profile UID from URL query (e.g. profile.html?uid=UID1819957)
         const urlParams = new URLSearchParams(window.location.search);
