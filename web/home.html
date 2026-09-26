@@ -824,20 +824,17 @@ loadUsers().then(() => {
 
         // ── Real-time profile photo update ──
         socket.on('profile_updated', (data) => {
-            // Re-fetch users list to get the latest avatars without massive socket payload
-            loadUsers();
-            
-            // If it's me, re-fetch my profile to get the latest photos
+            // Update in users list
+            const user = allUsers.find(u => u.uid === data.uid);
+            if (user) {
+                user.profile_photo = data.profile_photo;
+                renderUsers(allUsers);
+            }
+            // If it's me, update my own nav avatar too
             if (data.uid === me.uid) {
-                fetch(`${API}/api/auth/me`, { headers: { Authorization: 'Bearer ' + token } })
-                    .then(r => r.json())
-                    .then(userData => {
-                        if (userData && userData.uid) {
-                            me = { ...me, ...userData };
-                            localStorage.setItem('chet_user', JSON.stringify(me));
-                            initProfile();
-                        }
-                    }).catch(console.error);
+                me.profile_photo = data.profile_photo;
+                localStorage.setItem('chet_user', JSON.stringify(me));
+                initProfile();
             }
         });
 
