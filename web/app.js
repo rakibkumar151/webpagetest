@@ -711,7 +711,16 @@ function rebuildConnection() {
 function setupWebRTC() {
     pc = new RTCPeerConnection(rtcConfig);
 
-    if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+    if (localStream) {
+        localStream.getTracks().forEach(t => {
+            if (isScreenSharing && t.kind === 'video') return;
+            pc.addTrack(t, localStream);
+        });
+    }
+
+    if (isScreenSharing && screenStream) {
+        screenStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+    }
 
     pc.ontrack = (event) => {
         log('Remote track received kind=' + event.track.kind);
@@ -831,10 +840,8 @@ socket.on('offer', async ({ description }) => {
         
         if (collision) {
             log('Collision resolved via rollback');
-            await Promise.all([
-                pc.setLocalDescription({ type: 'rollback' }),
-                pc.setRemoteDescription(description)
-            ]);
+            await pc.setLocalDescription({ type: 'rollback' });
+            await pc.setRemoteDescription(description);
         } else {
             await pc.setRemoteDescription(description);
         }
