@@ -278,6 +278,30 @@
             border: 1px solid var(--border);
             overflow: hidden;
         }
+        
+        /* Reactions */
+        .reactions-bar {
+            position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%) translateY(10px);
+            background: var(--nav); border: 1px solid var(--border); border-radius: 30px;
+            padding: 4px 8px; display: flex; gap: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            z-index: 100; opacity: 0; pointer-events: none; transition: all 0.2s;
+        }
+        .msg-content-wrapper { position: relative; }
+        .msg-content-wrapper:hover .reactions-bar, .reactions-bar.active {
+            opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(-5px);
+        }
+        .reaction-btn {
+            background: none; border: none; font-size: 20px; cursor: pointer; transition: transform 0.1s; padding: 2px;
+        }
+        .reaction-btn:hover { transform: scale(1.3); }
+        .msg-reactions {
+            position: absolute; bottom: -12px; right: 0;
+            background: var(--nav); border: 1px solid var(--border); border-radius: 12px;
+            padding: 2px 6px; font-size: 12px; display: flex; gap: 2px; box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            z-index: 5;
+        }
+        .msg-row.recv .msg-reactions { right: auto; left: 0; }
+        .msg-reactions.hidden { display: none; }
 
         /* Input Area */
         .chat-input-area {
@@ -706,17 +730,41 @@
             }
         }
 
+        const emojis = ['❤️', '😂', '😮', '😢', '😡', '👍'];
+        const reactionsBarHTML = `
+            <div class="reactions-bar">
+                ${emojis.map(e => `<button class="reaction-btn" onclick="sendReaction(${msg.id}, '${e}')">${e}</button>`).join('')}
+            </div>
+        `;
+
         row.innerHTML = `
-            <div id="msg-${msg.id}" class="msg-content-wrapper">
+            <div id="msg-${msg.id}" class="msg-content-wrapper" oncontextmenu="toggleReactionMobile(event, this)">
+                ${reactionsBarHTML}
                 ${avatarHtml}
                 <div class="msg-bubble-wrapper">
                     <div class="msg-bubble" style="${payload.type === 'call_log' ? 'padding: 12px; ' : ''}${payload.type === 'call_log' && isMe ? 'background: var(--msg-recv) !important; color: var(--text) !important;' : ''}">${contentHtml}</div>
                     ${payload.type === 'call_log' ? '' : `<div class="msg-time">${formatTime(msg.created_at)}</div>`}
+                    <div class="msg-reactions hidden" id="reactions-${msg.id}"></div>
                 </div>
             </div>
         `;
         msgsArea.appendChild(row);
         scrollToBottom();
+        
+        let pressTimer;
+        const wrapper = row.querySelector('.msg-content-wrapper');
+        wrapper.addEventListener('touchstart', (e) => {
+            pressTimer = setTimeout(() => {
+                e.preventDefault();
+                wrapper.querySelector('.reactions-bar').classList.add('active');
+            }, 500);
+        });
+        wrapper.addEventListener('touchend', () => clearTimeout(pressTimer));
+        wrapper.addEventListener('touchmove', () => clearTimeout(pressTimer));
+        
+        if (msg.reactions) {
+            renderReactions(msg.id, msg.reactions);
+        }
         
         // Mark as seen if it's from partner and socket is ready
         if (!isMe && socket && socket.connected) {
@@ -757,6 +805,72 @@
             wrapper.insertAdjacentHTML('beforeend', seenHTML);
             scrollToBottom();
         }
+    }
+    
+    // --- REACTIONS ---
+    function sendReaction(msgId, reaction) {
+        if (!socket || !socket.connected) return;
+        socket.emit('add_reaction', { message_id: msgId, reaction: reaction, to_uid: partner.uid });
+        // Optimistic update
+        if (!window.localReactions) window.localReactions = {};
+        if (!window.localReactions[msgId]) window.localReactions[msgId] = {};
+        if (window.localReactions[msgId][me.uid] === reaction) delete window.localReactions[msgId][me.uid];
+        else window.localReactions[msgId][me.uid] = reaction;
+        renderReactions(msgId, window.localReactions[msgId]);
+        
+        const msgDiv = document.getElementById('msg-' + msgId);
+        if (msgDiv) {
+            const bar = msgDiv.querySelector('.reactions-bar');
+            if(bar) bar.classList.remove('active');
+        }
+    }
+
+    function toggleReactionMobile(e, el) {
+        e.preventDefault();
+        const bar = el.querySelector('.reactions-bar');
+        if(bar) bar.classList.toggle('active');
+    }
+
+    function renderReactions(msgId, reactionsObj) {
+        if (!window.localReactions) window.localReactions = {};
+        window.localReactions[msgId] = reactionsObj || {};
+        
+        const container = document.getElementById('reactions-' + msgId);
+        if (!container) return;
+        
+        if (!reactionsObj || Object.keys(reactionsObj).length === 0) {
+            container.classList.add('hidden');
+            container.innerHTML = '';
+            return;
+        }
+        
+        const counts = {};
+        let total = 0;
+        let myReaction = null;
+        
+        for (let uid in reactionsObj) {
+            const r = reactionsObj[uid];
+            counts[r] = (counts[r] || 0) + 1;
+            total++;
+            if (uid === me.uid) myReaction = r;
+        }
+        
+        const sorted = Object.keys(counts).sort((a,b) => counts[b] - counts[a]).slice(0, 3);
+        let html = sorted.join('') + (total > 1 ? `<span style="margin-left:2px">${total}</span>` : '');
+        
+        container.innerHTML = html;
+        container.classList.remove('hidden');
+        if (myReaction) {
+            container.style.borderColor = 'var(--accent1)';
+            container.style.background = 'rgba(124,108,255,0.1)';
+        } else {
+            container.style.borderColor = 'var(--border)';
+            container.style.background = 'var(--nav)';
+        }
+        
+        container.style.transform = 'scale(0.8)';
+        setTimeout(() => container.style.transform = 'scale(1)', 50);
+        container.style.transition = 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
     }
     
     // --- CUSTOM MEDIA VIEWERS ---
@@ -1179,6 +1293,10 @@
                 if (data.by_uid === partner.uid) {
                     updateSeenIndicator(data.message_id);
                 }
+            });
+            
+            socket.on('message_reaction', (data) => {
+                renderReactions(data.message_id, data.reactions);
             });
 
             // ── Incoming call from partner ──

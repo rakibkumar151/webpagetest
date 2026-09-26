@@ -97,6 +97,7 @@ if (TURSO_URL && TURSO_TOKEN) {
             try { await db.execute(`ALTER TABLE users ADD COLUMN last_active TEXT DEFAULT NULL`); } catch(e) {}
             try { await db.execute(`ALTER TABLE users ADD COLUMN profile_photo TEXT DEFAULT NULL`); } catch(e) {}
             try { await db.execute(`ALTER TABLE messages ADD COLUMN read_at TEXT DEFAULT NULL`); } catch(e) {}
+            try { await db.execute(`ALTER TABLE messages ADD COLUMN reactions TEXT DEFAULT NULL`); } catch(e) {}
             
             dbReady = true;
             console.log('[DB] Turso connected and tables ready');
@@ -360,7 +361,8 @@ app.get('/api/messages/:uid', authMiddleware, async (req, res) => {
             to_uid: row.to_uid,
             text: decryptMessage(row.encrypted_text),
             created_at: row.created_at,
-            read_at: row.read_at || null
+            read_at: row.read_at || null,
+            reactions: row.reactions ? JSON.parse(row.reactions) : null
         }));
         
         res.json(messages);
@@ -390,7 +392,8 @@ app.post('/api/messages', authMiddleware, async (req, res) => {
             from_uid,
             to_uid,
             text, // Send back raw text to caller
-            created_at: result.rows[0].created_at
+            created_at: result.rows[0].created_at,
+            reactions: null
         };
 
         // If target is connected via Socket, push it real-time
@@ -463,6 +466,53 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('add_reaction', async (data) => {
+        // data: { message_id, reaction, to_uid }
+        if (!socket.data.uid || !data.message_id || !data.reaction) return;
+        
+        if (db) {
+            try {
+                const res = await db.execute({
+                    sql: `SELECT reactions FROM messages WHERE id = ?`,
+                    args: [data.message_id]
+                });
+                if (res.rows.length > 0) {
+                    let reactionsObj = {};
+                    if (res.rows[0].reactions) {
+                        try { reactionsObj = JSON.parse(res.rows[0].reactions); } catch(e){}
+                    }
+                    
+                    if (reactionsObj[socket.data.uid] === data.reaction) {
+                        delete reactionsObj[socket.data.uid]; // Toggle off
+                    } else {
+                        reactionsObj[socket.data.uid] = data.reaction; // Set/change
+                    }
+                    
+                    const newReactionsStr = Object.keys(reactionsObj).length > 0 ? JSON.stringify(reactionsObj) : null;
+                    
+                    await db.execute({
+                        sql: `UPDATE messages SET reactions = ? WHERE id = ?`,
+                        args: [newReactionsStr, data.message_id]
+                    });
+                    
+                    const payload = { message_id: data.message_id, reactions: reactionsObj };
+                    
+                    if (globalUserSockets.has(data.to_uid)) {
+                        for (let sId of globalUserSockets.get(data.to_uid)) {
+                            io.to(sId).emit('message_reaction', payload);
+                        }
+                    }
+                    if (globalUserSockets.has(socket.data.uid)) {
+                        for (let sId of globalUserSockets.get(socket.data.uid)) {
+                            io.to(sId).emit('message_reaction', payload);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('[CHAT] add_reaction error:', e.message);
+            }
+        }
+    });
     // ─── INCOMING CALL SIGNAL ──────────────────────────────────────────────────
     socket.on('incoming_call', (data, ack) => {
         // data: { to_uid, caller, callId, isVideo }
