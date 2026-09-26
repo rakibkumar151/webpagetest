@@ -147,23 +147,26 @@ io.on('connection', (socket) => {
             return;
         }
         const room = io.sockets.adapter.rooms.get(data.callId);
-        if (room) {
-            socket.join(data.callId);
-            socket.data.callId = data.callId;
-            socket.data.sessionId = data.sessionId;
-            
-            // Track new socket in session registry
-            if (!roomSessions.has(data.callId)) roomSessions.set(data.callId, new Map());
-            const sessions = roomSessions.get(data.callId);
-            if (!sessions.has(data.sessionId)) sessions.set(data.sessionId, new Set());
-            sessions.get(data.sessionId).add(socket.id);
+        
+        socket.join(data.callId);
+        socket.data.callId = data.callId;
+        socket.data.sessionId = data.sessionId;
+        
+        // Track new socket in session registry
+        if (!roomSessions.has(data.callId)) roomSessions.set(data.callId, new Map());
+        const sessions = roomSessions.get(data.callId);
+        if (!sessions.has(data.sessionId)) sessions.set(data.sessionId, new Set());
+        sessions.get(data.sessionId).add(socket.id);
 
-            callback({ status: 'resume_ok' });
+        callback({ status: 'resume_ok' });
+        
+        // If the room already existed (someone was here), notify them we resumed.
+        // If not, we are the first one back after server restart, wait for the other.
+        if (room) {
             socket.to(data.callId).emit('peer_connected');
-            console.log(`[ROOM] resumed callId=${data.callId} id=${socket.id}`);
-        } else {
-            callback({ status: 'resume_failed' });
         }
+        
+        console.log(`[ROOM] resumed callId=${data.callId} id=${socket.id} (room existed: ${!!room})`);
     });
 
     socket.on('offer', (data) => {
