@@ -273,21 +273,25 @@ joinBtn.addEventListener('click', async () => {
     try {
         if (!localStream) {
             try {
-                // Try Video + Audio first with limited resolution to prevent mobile lag
+                // Default to AUDIO ONLY (Messenger style)
                 localStream = await navigator.mediaDevices.getUserMedia({
                     audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-                    video: { 
-                        facingMode: currentFacingMode,
-                        width: { ideal: 640 },
-                        height: { ideal: 480 },
-                        frameRate: { ideal: 24 }
-                    }
+                    video: false
                 });
+                
+                isVideoMuted = true;
+                videoBtn.classList.add('active'); // Show slashed icon
+                videoBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+                
+                // Hide PIP container initially
+                const localContainer = document.querySelector('.local-video-container');
+                if (localContainer) localContainer.style.display = 'none';
+                
                 localVideo.srcObject = localStream;
-                localVideo.classList.add('pip-active');
-                localVideo.style.display = 'block';
+                localVideo.classList.remove('pip-active');
+                
                 videoBtn.disabled = false;
-                switchCameraBtn.disabled = false;
+                switchCameraBtn.disabled = true; // No video initially
             } catch (err) {
                 log('Camera not available or blocked, falling back to audio only', err.message);
                 // Fallback to Audio only
@@ -362,6 +366,11 @@ videoBtn.addEventListener('click', async () => {
             track.stop(); // Truly turn off the hardware camera
         }
         videoBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+        
+        // Hide PIP container when video is off
+        const localContainer = document.querySelector('.local-video-container');
+        if (localContainer) localContainer.style.display = 'none';
+        switchCameraBtn.disabled = true;
     } else {
         try {
             const newStream = await navigator.mediaDevices.getUserMedia({
@@ -379,11 +388,24 @@ videoBtn.addEventListener('click', async () => {
             if (oldTrack) localStream.removeTrack(oldTrack);
             localStream.addTrack(newTrack);
             
+            localVideo.srcObject = localStream;
+            localVideo.classList.add('pip-active');
+            
             if (pc) {
                 const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
-                if (sender) await sender.replaceTrack(newTrack);
+                if (sender) {
+                    await sender.replaceTrack(newTrack);
+                } else {
+                    // Add video track if it didn't exist (started as audio-only)
+                    pc.addTrack(newTrack, localStream);
+                }
             }
             videoBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>`;
+            
+            // Show PIP container when video is on
+            const localContainer = document.querySelector('.local-video-container');
+            if (localContainer) localContainer.style.display = 'block';
+            switchCameraBtn.disabled = false;
         } catch (e) {
             log('Failed to restart camera', e.message);
             isVideoMuted = true;
@@ -392,12 +414,10 @@ videoBtn.addEventListener('click', async () => {
         }
     }
     
-    // Update local placeholder
+    // We don't need local placeholder anymore since container is hidden entirely when off,
+    // but we can ensure it's hidden just in case.
     const localVideoStatus = document.getElementById('localVideoStatus');
-    if (localVideoStatus) {
-        if (isVideoMuted) localVideoStatus.classList.remove('hidden');
-        else localVideoStatus.classList.add('hidden');
-    }
+    if (localVideoStatus) localVideoStatus.classList.add('hidden');
     
     // Notify peer
     if (currentCallId) {

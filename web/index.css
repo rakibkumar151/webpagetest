@@ -151,6 +151,7 @@ input[type="text"]:focus { border-color: var(--primary); }
     transform: translateZ(0); /* GPU */
     will-change: transform;
     transition: transform 0.3s;
+    display: none; /* Hidden by default until video is turned on */
 }
 
 .local-video-container:active {
