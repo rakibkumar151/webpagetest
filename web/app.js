@@ -669,7 +669,6 @@ function stopScreenSharing() {
     }
 }
 
-// ─── CLEANUP ──────────────────────────────────────────────────────────────────
 function cleanupCall(isManual = false) {
     log('cleanupCall isManual=' + isManual);
     if (isManual) {
@@ -677,6 +676,29 @@ function cleanupCall(isManual = false) {
         changeAppState('ENDED', 'Call ended');
     } else if (appState !== 'FAILED') {
         changeAppState('IDLE', 'Ready');
+    }
+
+    if (polite && currentCallId) {
+        try {
+            const pStr = sessionStorage.getItem('callPartner');
+            const token = localStorage.getItem('chet_token') || sessionStorage.getItem('chet_token');
+            if (pStr && token) {
+                const p = JSON.parse(pStr);
+                const API = window.APP_CONFIG?.SIGNALING_URL || window.location.origin;
+                fetch(`${API}/api/messages`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({
+                        to_uid: p.uid,
+                        text: JSON.stringify({
+                            type: 'call_log',
+                            status: secondsConnected > 0 ? 'ended' : 'missed',
+                            duration: secondsConnected
+                        })
+                    })
+                }).catch(()=>{});
+            }
+        } catch(e) {}
     }
 
     RecoveryManager.reset();

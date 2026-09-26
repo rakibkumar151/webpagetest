@@ -434,6 +434,33 @@
                     <div class="voice-time">0:00</div>
                 </div>
             `;
+        } else if (payload.type === 'call_log') {
+            const isMissed = payload.status === 'missed';
+            let durText = '';
+            if (!isMissed) {
+                let m = Math.floor(payload.duration / 60);
+                let s = payload.duration % 60;
+                durText = m > 0 ? `${m} mins ${s} secs` : `${s} secs`;
+            }
+            
+            const title = isMissed 
+                ? (isMe ? `${esc(partner.first_name)} missed your video chat.` : `You missed a video chat.`)
+                : 'The video chat ended.';
+                
+            const arrow = isMe ? '↗' : '↙';
+            const subText = isMissed ? 'Missed' : durText;
+            const timeStr = formatTime(msg.created_at);
+            
+            contentHtml = `
+                <div style="display:flex; flex-direction:column; gap:4px; min-width: 180px;">
+                    <strong style="font-size: 15px;">${title}</strong>
+                    <div style="font-size: 12px; opacity: 0.7; margin-bottom: 8px;">${arrow} ${subText}, ${timeStr}</div>
+                    <button onclick="startCall(true)" style="background:transparent; color: inherit; font-weight: bold; font-size: 13px; border: none; padding: 10px 0 0 0; text-align: left; cursor: pointer; border-top: 1px solid rgba(255,255,255,0.15); width: 100%;">
+                        CALL ${isMe ? 'AGAIN' : 'BACK'}
+                    </button>
+                </div>
+            `;
+            row.classList.add('call-log-row');
         } else {
             contentHtml = esc(payload.content || msg.text);
         }
@@ -441,7 +468,7 @@
         row.innerHTML = `
             <div id="msg-${msg.id}">
                 <div class="msg-bubble">${contentHtml}</div>
-                <div class="msg-time">${formatTime(msg.created_at)}</div>
+                ${payload.type === 'call_log' ? '' : `<div class="msg-time">${formatTime(msg.created_at)}</div>`}
             </div>
         `;
         msgsArea.appendChild(row);
