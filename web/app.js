@@ -763,6 +763,11 @@ socket.on('connect', () => {
     socket.emit('resume_call', { callId: currentCallId, sessionId }, (res) => {
         if (res && res.status === 'resume_ok') {
             log('[RECOVERY] Session resumed');
+            if (!pc) {
+                log('[RECOVERY] PC is null. Requesting peer rebuild and setting up local WebRTC.');
+                socket.emit('peer_action', { callId: currentCallId, action: 'rebuild_webrtc' });
+                setupWebRTC();
+            }
         } else {
             log('[RECOVERY] Resume failed — session expired');
             changeAppState('FAILED', 'Session expired. Please rejoin.');
@@ -800,7 +805,12 @@ socket.on('peer_role', ({ polite: isPolite }) => {
 socket.on('peer_connected', () => {
     log('Peer connected — starting WebRTC');
     changeAppState('CONNECTING', 'Peer connected...');
-    if (!pc) setupWebRTC();
+    if (pc) {
+        log('Peer reconnected. Rebuilding WebRTC...');
+        rebuildConnection();
+    } else {
+        setupWebRTC();
+    }
 });
 
 socket.on('peer_disconnected', () => {
@@ -882,6 +892,9 @@ socket.on('peer_action', (data) => {
         } else {
             remoteVideo.classList.remove('is-screen-share');
         }
+    } else if (data.action === 'rebuild_webrtc') {
+        log('Peer requested WebRTC rebuild');
+        rebuildConnection();
     }
 });
 
@@ -932,6 +945,10 @@ window.addEventListener('load', async () => {
                 socket.emit('resume_call', { callId: currentCallId, sessionId }, (res) => {
                     if (res && res.status === 'resume_ok') {
                         log('[RECOVERY] Session resumed on reload');
+                        if (!pc) {
+                            socket.emit('peer_action', { callId: currentCallId, action: 'rebuild_webrtc' });
+                            setupWebRTC();
+                        }
                     } else {
                         changeAppState('FAILED', 'Session expired. Please rejoin.');
                         cleanupCall(false);
