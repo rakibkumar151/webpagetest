@@ -648,8 +648,9 @@
 
         // Target profile UID from URL query (e.g. profile.html?uid=UID1819957)
         const urlParams = new URLSearchParams(window.location.search);
-        let profileUid = urlParams.get('uid') || myUser.uid;
-        let isOwnProfile = (profileUid === myUser.uid);
+        let targetUid = (urlParams.get('uid') || '').trim();
+        let profileUid = targetUid || myUser.uid;
+        let isOwnProfile = (!targetUid || (myUser.uid && targetUid === myUser.uid));
 
         let currentProfileData = null;
         let socket = null;
@@ -781,13 +782,13 @@
 
         async function loadProfileData() {
             try {
-                const endpoint = isOwnProfile ? `${API}/api/auth/me` : `${API}/api/users/${profileUid}`;
+                const endpoint = isOwnProfile ? `${API}/api/auth/me` : `${API}/api/users/${encodeURIComponent(profileUid)}`;
                 const res = await fetch(endpoint, {
                     headers: { Authorization: 'Bearer ' + token }
                 });
                 if (res.status === 401) { window.location.href = 'auth.html'; return; }
                 const data = await res.json();
-                if (data.error) { showToast(data.error); return; }
+                if (!res.ok || data.error) { showToast(data.error || 'Failed to load profile'); return; }
 
                 if (isOwnProfile) {
                     myUser = data;
@@ -795,6 +796,7 @@
                 }
                 renderProfile(data);
             } catch(e) {
+                console.error('[PROFILE] Load error:', e);
                 showToast('Failed to load profile');
             }
         }

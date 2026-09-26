@@ -94,15 +94,25 @@ if (TURSO_URL && TURSO_TOKEN) {
                 )
             `);
             // Add columns safely to existing tables
-            try { await db.execute(`ALTER TABLE users ADD COLUMN last_active TEXT DEFAULT NULL`); } catch(e) {}
-            try { await db.execute(`ALTER TABLE users ADD COLUMN profile_photo TEXT DEFAULT NULL`); } catch(e) {}
-            try { await db.execute(`ALTER TABLE messages ADD COLUMN read_at TEXT DEFAULT NULL`); } catch(e) {}
-            try { await db.execute(`ALTER TABLE messages ADD COLUMN reactions TEXT DEFAULT NULL`); } catch(e) {}
-            try { await db.execute(`ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0`); } catch(e) {}
-            try { await db.execute(`ALTER TABLE users ADD COLUMN bio TEXT DEFAULT NULL`); } catch(e) {}
-            try { await db.execute(`ALTER TABLE users ADD COLUMN tagline TEXT DEFAULT NULL`); } catch(e) {}
-            try { await db.execute(`ALTER TABLE users ADD COLUMN location TEXT DEFAULT NULL`); } catch(e) {}
-            try { await db.execute(`ALTER TABLE users ADD COLUMN cover_photo TEXT DEFAULT NULL`); } catch(e) {}
+            const migrationCols = [
+                { t: 'users', c: 'last_active', d: 'TEXT' },
+                { t: 'users', c: 'profile_photo', d: 'TEXT' },
+                { t: 'messages', c: 'read_at', d: 'TEXT' },
+                { t: 'messages', c: 'reactions', d: 'TEXT' },
+                { t: 'users', c: 'is_verified', d: 'INTEGER DEFAULT 0' },
+                { t: 'users', c: 'bio', d: 'TEXT' },
+                { t: 'users', c: 'tagline', d: 'TEXT' },
+                { t: 'users', c: 'location', d: 'TEXT' },
+                { t: 'users', c: 'cover_photo', d: 'TEXT' }
+            ];
+            for (const col of migrationCols) {
+                try {
+                    await db.execute(`ALTER TABLE ${col.t} ADD COLUMN ${col.c} ${col.d}`);
+                    console.log(`[DB] Migration added ${col.c} to ${col.t}`);
+                } catch(e) {
+                    // Ignored if column already exists
+                }
+            }
 
             // Create verified_uids table — paneer edits this directly in Turso dashboard
             await db.execute(`
@@ -292,16 +302,22 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
     try {
         const result = await db.execute({
-            sql: `SELECT uid, username, first_name, last_name, email, created_at, profile_photo, is_verified, bio, tagline, location, cover_photo FROM users WHERE uid = ? LIMIT 1`,
+            sql: `SELECT * FROM users WHERE uid = ? LIMIT 1`,
             args: [req.user.uid]
         });
         if (!result.rows.length) return res.status(404).json({ error: 'User not found' });
         const user = result.rows[0];
+        delete user.password_hash;
         user.is_verified = user.is_verified === 1 || user.is_verified === true;
         user.is_online = globalUserSockets.has(user.uid);
+        user.bio = user.bio || null;
+        user.tagline = user.tagline || null;
+        user.location = user.location || null;
+        user.cover_photo = user.cover_photo || null;
         res.json(user);
     } catch (e) {
-        res.status(500).json({ error: 'Failed to load profile' });
+        console.error('[AUTH ME] Error loading profile:', e.message);
+        res.status(500).json({ error: 'Failed to load profile: ' + e.message });
     }
 });
 
@@ -311,17 +327,22 @@ app.get('/api/users/:uid', authMiddleware, async (req, res) => {
     const targetUid = req.params.uid;
     try {
         const result = await db.execute({
-            sql: `SELECT uid, username, first_name, last_name, created_at, last_active, profile_photo, is_verified, bio, tagline, location, cover_photo FROM users WHERE uid = ? LIMIT 1`,
+            sql: `SELECT * FROM users WHERE uid = ? LIMIT 1`,
             args: [targetUid]
         });
         if (!result.rows.length) return res.status(404).json({ error: 'User not found' });
         const u = result.rows[0];
+        delete u.password_hash;
         u.is_verified = u.is_verified === 1 || u.is_verified === true;
         u.is_online = globalUserSockets.has(u.uid);
+        u.bio = u.bio || null;
+        u.tagline = u.tagline || null;
+        u.location = u.location || null;
+        u.cover_photo = u.cover_photo || null;
         res.json(u);
     } catch (e) {
         console.error('[USERS] Get profile error:', e.message);
-        res.status(500).json({ error: 'Failed to load profile' });
+        res.status(500).json({ error: 'Failed to load profile: ' + e.message });
     }
 });
 
@@ -333,37 +354,34 @@ app.get('/api/users', authMiddleware, async (req, res) => {
         let result;
         if (q) {
             result = await db.execute({
-                sql: `SELECT uid, username, first_name, last_name, created_at, last_active, profile_photo, is_verified, bio, tagline, location, cover_photo FROM users
+                sql: `SELECT * FROM users
                       WHERE (username LIKE ? OR first_name LIKE ? OR last_name LIKE ? OR uid LIKE ?)
                       AND uid != ? LIMIT 40`,
                 args: [`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, req.user.uid]
             });
         } else {
             result = await db.execute({
-                sql: `SELECT uid, username, first_name, last_name, created_at, last_active, profile_photo, is_verified, bio, tagline, location, cover_photo FROM users
+                sql: `SELECT * FROM users
                       WHERE uid != ? ORDER BY created_at DESC LIMIT 40`,
                 args: [req.user.uid]
             });
         }
-        const users = result.rows.map(u => ({
-            uid: u.uid,
-            username: u.username,
-            first_name: u.first_name,
-            last_name: u.last_name,
-            created_at: u.created_at,
-            last_active: u.last_active || null,
-            profile_photo: u.profile_photo || null,
-            cover_photo: u.cover_photo || null,
-            bio: u.bio || null,
-            tagline: u.tagline || null,
-            location: u.location || null,
-            is_online: globalUserSockets.has(u.uid),
-            is_verified: u.is_verified === 1 || u.is_verified === true
-        }));
+        const users = result.rows.map(u => {
+            delete u.password_hash;
+            return {
+                ...u,
+                is_online: globalUserSockets.has(u.uid),
+                is_verified: u.is_verified === 1 || u.is_verified === true,
+                bio: u.bio || null,
+                tagline: u.tagline || null,
+                location: u.location || null,
+                cover_photo: u.cover_photo || null
+            };
+        });
         res.json(users);
     } catch (e) {
         console.error('[USERS] List error:', e.message);
-        res.status(500).json({ error: 'Failed to load users' });
+        res.status(500).json({ error: 'Failed to load users: ' + e.message });
     }
 });
 
@@ -404,11 +422,12 @@ app.post('/api/users/profile', authMiddleware, async (req, res) => {
 
         // Get updated profile data
         const updatedRes = await db.execute({
-            sql: `SELECT uid, username, first_name, last_name, created_at, profile_photo, cover_photo, bio, tagline, location, is_verified FROM users WHERE uid = ? LIMIT 1`,
+            sql: `SELECT * FROM users WHERE uid = ? LIMIT 1`,
             args: [req.user.uid]
         });
         const updatedUser = updatedRes.rows[0];
         if (updatedUser) {
+            delete updatedUser.password_hash;
             updatedUser.is_verified = updatedUser.is_verified === 1 || updatedUser.is_verified === true;
             updatedUser.is_online = true;
 
