@@ -781,7 +781,8 @@ fetch(`${API}/api/auth/me`, { headers: { Authorization: 'Bearer ' + token } })
     .then(r => r.json())
     .then(data => {
         if (data && data.uid) {
-            me = data;
+            // Merge full API data so cover_photo, bio, tagline etc. persist across login/logout
+            me = { ...me, ...data };
             localStorage.setItem('chet_user', JSON.stringify(me));
             initProfile();
         }

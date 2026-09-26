@@ -1095,7 +1095,8 @@
                 if (!res.ok || data.error) { showToast(data.error || 'Failed to load profile'); return; }
 
                 if (isOwnProfile) {
-                    myUser = data;
+                    // Full sync — merge API data so all fields (cover_photo, bio, etc.) persist across login
+                    myUser = { ...myUser, ...data };
                     localStorage.setItem('chet_user', JSON.stringify(myUser));
                 }
                 renderProfile(data);
@@ -1189,34 +1190,81 @@
         function handleAvatarUpload(e) {
             const file = e.target.files[0];
             if (!file) return;
-            compressImage(file, 300, 0.85, async (base64) => {
-                const res = await fetch(`${API}/api/users/profile`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                    body: JSON.stringify({ profile_photo: base64 })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showToast('Avatar updated!');
-                    loadProfileData();
+
+            // Client-side size check: 5MB
+            const mb = (file.size / 1024 / 1024).toFixed(2);
+            if (file.size > 5 * 1024 * 1024) {
+                showToast(`Image too large (${mb} MB). Max 5 MB.`);
+                e.target.value = '';
+                return;
+            }
+
+            showToast('Uploading avatar...');
+            compressImage(file, 400, 0.85, async (base64) => {
+                try {
+                    const res = await fetch(`${API}/api/users/profile`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        body: JSON.stringify({ profile_photo: base64 })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast('Avatar updated! ✅');
+                        if (data.user) {
+                            myUser = { ...myUser, ...data.user };
+                            localStorage.setItem('chet_user', JSON.stringify(myUser));
+                            renderProfile(myUser);
+                        } else {
+                            loadProfileData();
+                        }
+                    } else {
+                        showToast(data.error || 'Upload failed');
+                    }
+                } catch(err) {
+                    showToast('Upload error — check connection');
                 }
+                e.target.value = '';
             });
         }
 
         function handleCoverUpload(e) {
             const file = e.target.files[0];
             if (!file) return;
-            compressImage(file, 1000, 0.85, async (base64) => {
-                const res = await fetch(`${API}/api/users/profile`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                    body: JSON.stringify({ cover_photo: base64 })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showToast('Cover photo updated!');
-                    loadProfileData();
+
+            // Client-side size check: 7MB
+            const mb = (file.size / 1024 / 1024).toFixed(2);
+            if (file.size > 7 * 1024 * 1024) {
+                showToast(`Cover too large (${mb} MB). Max 7 MB.`);
+                e.target.value = '';
+                return;
+            }
+
+            showToast('Uploading cover photo...');
+            // Cover: wider crop, slightly lower quality to keep size manageable
+            compressImage(file, 1400, 0.82, async (base64) => {
+                try {
+                    const res = await fetch(`${API}/api/users/profile`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        body: JSON.stringify({ cover_photo: base64 })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast('Cover photo updated! ✅');
+                        if (data.user) {
+                            myUser = { ...myUser, ...data.user };
+                            localStorage.setItem('chet_user', JSON.stringify(myUser));
+                            renderProfile(myUser);
+                        } else {
+                            loadProfileData();
+                        }
+                    } else {
+                        showToast(data.error || 'Upload failed');
+                    }
+                } catch(err) {
+                    showToast('Upload error — check connection');
                 }
+                e.target.value = '';
             });
         }
 
