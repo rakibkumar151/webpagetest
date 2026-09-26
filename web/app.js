@@ -231,7 +231,10 @@ async function fetchTurnCredentials() {
     }
 
     try {
-        const res  = await fetch(`${SIGNALING_URL}/api/turn-credentials`);
+        const token = localStorage.getItem('chet_token') || sessionStorage.getItem('chet_token');
+        const res  = await fetch(`${SIGNALING_URL}/api/turn-credentials`, {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
