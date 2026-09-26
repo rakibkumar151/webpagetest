@@ -438,6 +438,45 @@ io.on('connection', (socket) => {
         }
     });
 
+    // ─── INCOMING CALL SIGNAL ──────────────────────────────────────────────────
+    socket.on('incoming_call', (data) => {
+        // data: { to_uid, caller, callId, isVideo }
+        if (!socket.data.uid) return;
+        if (globalUserSockets.has(data.to_uid)) {
+            const socketIds = globalUserSockets.get(data.to_uid);
+            for (let sId of socketIds) {
+                io.to(sId).emit('incoming_call', {
+                    from_uid: socket.data.uid,
+                    caller: data.caller,
+                    callId: data.callId,
+                    isVideo: data.isVideo
+                });
+            }
+        }
+    });
+
+    socket.on('call_reject', (data) => {
+        // data: { to_uid, from_uid }
+        if (!socket.data.uid) return;
+        if (globalUserSockets.has(data.to_uid)) {
+            const socketIds = globalUserSockets.get(data.to_uid);
+            for (let sId of socketIds) {
+                io.to(sId).emit('call_rejected', { by_uid: socket.data.uid });
+            }
+        }
+    });
+
+    socket.on('call_no_answer', (data) => {
+        // data: { to_uid } — caller notifies callee it timed out
+        if (!socket.data.uid) return;
+        if (globalUserSockets.has(data.to_uid)) {
+            const socketIds = globalUserSockets.get(data.to_uid);
+            for (let sId of socketIds) {
+                io.to(sId).emit('call_missed', { from_uid: socket.data.uid });
+            }
+        }
+    });
+
     socket.on('join_call', (data) => {
         let callId    = typeof data === 'string' ? data : data.callId;
         let sessionId = typeof data === 'object' ? data.sessionId : 'unknown-' + socket.id;

@@ -261,9 +261,98 @@
         @media (max-width: 600px) {
             .chat-container { border: none; }
         }
+
+        /* ── Incoming Call Overlay ───────────────────────── */
+        .call-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.72);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+        }
+        .call-overlay.active { display: flex; }
+        .call-card {
+            background: var(--nav);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 40px 28px 28px;
+            width: 300px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 30px 70px rgba(0,0,0,0.85);
+            animation: callPop 0.35s cubic-bezier(0.34,1.56,0.64,1);
+        }
+        @keyframes callPop {
+            from { transform: scale(0.75) translateY(30px); opacity: 0; }
+            to { transform: scale(1) translateY(0); opacity: 1; }
+        }
+        .call-card-avatar {
+            width: 84px; height: 84px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent1), var(--accent2));
+            display: flex; align-items: center; justify-content: center;
+            font-size: 30px; font-weight: 700;
+            animation: callPulse 1.5s infinite;
+        }
+        @keyframes callPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(124,108,255,0.55); }
+            50% { box-shadow: 0 0 0 20px rgba(124,108,255,0); }
+        }
+        .call-card-name { font-size: 21px; font-weight: 700; margin-top: 6px; text-align: center; }
+        .call-card-type { font-size: 12px; color: var(--muted); letter-spacing: 0.5px; }
+        .call-timer-bar {
+            width: 100%; background: rgba(255,255,255,0.08);
+            border-radius: 99px; height: 3px; overflow: hidden; margin: 8px 0 4px;
+        }
+        .call-timer-fill {
+            height: 100%; background: var(--accent1);
+            width: 100%; border-radius: 99px;
+            transition: width 1s linear;
+        }
+        .call-actions { display: flex; gap: 36px; margin-top: 12px; }
+        .call-action-btn {
+            display: flex; flex-direction: column;
+            align-items: center; gap: 6px; background: none; border: none; cursor: pointer;
+            transition: transform 0.15s;
+        }
+        .call-action-btn:hover { transform: scale(1.08); }
+        .call-action-icon {
+            width: 68px; height: 68px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .call-action-btn.reject .call-action-icon { background: #ef4444; }
+        .call-action-btn.accept .call-action-icon { background: #10b981; }
+        .call-action-label { font-size: 12px; font-weight: 600; color: var(--text); }
     </style>
 </head>
 <body>
+<!-- Incoming Call Overlay -->
+<div class="call-overlay" id="callOverlay">
+    <div class="call-card">
+        <div class="call-card-avatar" id="incomingCallAvatar">?</div>
+        <div class="call-card-name" id="incomingCallName">Calling...</div>
+        <div class="call-card-type" id="incomingCallType">Video Call</div>
+        <div class="call-timer-bar"><div class="call-timer-fill" id="callTimerFill"></div></div>
+        <div class="call-actions">
+            <button class="call-action-btn reject" onclick="rejectCall()">
+                <div class="call-action-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="23" y1="1" x2="1" y2="23"/></svg>
+                </div>
+                <span class="call-action-label">Decline</span>
+            </button>
+            <button class="call-action-btn accept" onclick="acceptCall()">
+                <div class="call-action-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                </div>
+                <span class="call-action-label">Accept</span>
+            </button>
+        </div>
+    </div>
+</div>
 
 <nav>
     <button class="back-btn" onclick="window.location.href='home.html'">
@@ -436,28 +525,30 @@
             `;
         } else if (payload.type === 'call_log') {
             const isMissed = payload.status === 'missed';
+            const isRejected = payload.status === 'rejected';
             let durText = '';
-            if (!isMissed) {
-                let m = Math.floor(payload.duration / 60);
-                let s = payload.duration % 60;
-                durText = m > 0 ? `${m} mins ${s} secs` : `${s} secs`;
+            if (!isMissed && !isRejected && payload.duration) {
+                let mm = Math.floor(payload.duration / 60);
+                let ss = payload.duration % 60;
+                durText = mm > 0 ? `${mm} mins ${ss} secs` : `${ss} secs`;
             }
-            
-            const title = isMissed 
-                ? (isMe ? `${esc(partner.first_name)} missed your video chat.` : `You missed a video chat.`)
-                : 'The video chat ended.';
-                
-            const arrow = isMe ? '↗' : '↙';
-            const subText = isMissed ? 'Missed' : durText;
+            const callTypeLabel = 'video chat';
+            let title;
+            if (isRejected) {
+                title = isMe ? `${esc(partner.first_name)} declined your call.` : `You declined the call.`;
+            } else if (isMissed) {
+                title = isMe ? `${esc(partner.first_name)} missed your ${callTypeLabel}.` : `You missed a ${callTypeLabel}.`;
+            } else {
+                title = `The ${callTypeLabel} ended.`;
+            }
+            const arrow = isMe ? '\u2197' : '\u2199';
+            const subText = isRejected ? 'Declined' : (isMissed ? 'Missed' : durText);
             const timeStr = formatTime(msg.created_at);
-            
             contentHtml = `
                 <div style="display:flex; flex-direction:column; gap:4px; min-width: 180px;">
                     <strong style="font-size: 15px;">${title}</strong>
                     <div style="font-size: 12px; opacity: 0.7; margin-bottom: 8px;">${arrow} ${subText}, ${timeStr}</div>
-                    <button onclick="startCall(true)" style="background:transparent; color: var(--accent1); font-weight: bold; font-size: 13px; border: none; padding: 10px 0 0 0; text-align: left; cursor: pointer; border-top: 1px solid rgba(255,255,255,0.15); width: 100%;">
-                        CALL ${isMe ? 'AGAIN' : 'BACK'}
-                    </button>
+                    ${!isRejected ? `<button onclick="startCall(true)" style="background:transparent; color: var(--accent1); font-weight: bold; font-size: 13px; border: none; padding: 10px 0 0 0; text-align: left; cursor: pointer; border-top: 1px solid rgba(255,255,255,0.15); width: 100%;">CALL ${isMe ? 'AGAIN' : 'BACK'}</button>` : ''}
                 </div>
             `;
             row.classList.add('call-log-row');
@@ -581,6 +672,9 @@
     }
     
     // --- CALLS & THEMES ---
+    let activeIncomingCall = null; // { callId, from_uid, isVideo }
+    let incomingCallTimer = null;
+
     async function startCall(isVideo) {
         try {
             const r = await fetch(`${API}/api/calls/initiate`, {
@@ -597,14 +691,106 @@
                 sessionId: data.sessionId,
                 secondsConnected: 0,
                 isMuted: false,
-                isVideoMuted: !isVideo, // Start with video based on which button they clicked
-                isRemoteScreenSharing: false
+                isVideoMuted: !isVideo,
+                isRemoteScreenSharing: false,
+                isCaller: true
             }));
             sessionStorage.setItem('callPartner', JSON.stringify(partner));
+
+            // Signal the callee in realtime
+            if (socket && socket.connected) {
+                socket.emit('incoming_call', {
+                    to_uid: partner.uid,
+                    caller: { first_name: me.first_name, last_name: me.last_name, uid: me.uid },
+                    callId: data.callId,
+                    isVideo: isVideo
+                });
+            }
+
+            // 20s auto-cancel if not answered
+            window._callAutoCancel = setTimeout(() => {
+                if (socket && socket.connected) {
+                    socket.emit('call_no_answer', { to_uid: partner.uid });
+                }
+                // Save missed log — caller side
+                saveCallLog('missed', 0);
+                sessionStorage.removeItem('activeCall');
+                window.location.href = 'chat.html?' + new URLSearchParams({ partner: JSON.stringify(partner) });
+            }, 20000);
+
             window.location.href = 'index.html';
         } catch(e) {
             alert('Connection error. Check your internet.');
         }
+    }
+
+    function saveCallLog(status, duration) {
+        fetch(`${API}/api/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({
+                to_uid: partner.uid,
+                text: JSON.stringify({ type: 'call_log', status, duration })
+            })
+        }).catch(() => {});
+    }
+
+    function showIncomingCallOverlay(data) {
+        activeIncomingCall = data;
+        document.getElementById('incomingCallAvatar').textContent = getInitials(data.caller.first_name, data.caller.last_name);
+        document.getElementById('incomingCallName').textContent = (data.caller.first_name || '') + ' ' + (data.caller.last_name || '');
+        document.getElementById('incomingCallType').textContent = data.isVideo ? '📹 Incoming Video Call' : '📞 Incoming Voice Call';
+        document.getElementById('callOverlay').classList.add('active');
+        
+        // Progress bar countdown 20s
+        const fill = document.getElementById('callTimerFill');
+        fill.style.transition = 'none';
+        fill.style.width = '100%';
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                fill.style.transition = 'width 20s linear';
+                fill.style.width = '0%';
+            });
+        });
+        
+        incomingCallTimer = setTimeout(() => dismissIncomingCall(true), 20000);
+    }
+
+    function dismissIncomingCall(wasMissed = false) {
+        clearTimeout(incomingCallTimer);
+        incomingCallTimer = null;
+        document.getElementById('callOverlay').classList.remove('active');
+        activeIncomingCall = null;
+    }
+
+    function rejectCall() {
+        if (!activeIncomingCall) return;
+        if (socket && socket.connected) {
+            socket.emit('call_reject', { to_uid: activeIncomingCall.from_uid });
+        }
+        dismissIncomingCall();
+    }
+
+    function acceptCall() {
+        if (!activeIncomingCall) return;
+        clearTimeout(incomingCallTimer);
+        incomingCallTimer = null;
+        const data = activeIncomingCall;
+        activeIncomingCall = null;
+        document.getElementById('callOverlay').classList.remove('active');
+        
+        // Join the call as recipient
+        sessionStorage.setItem('activeCall', JSON.stringify({
+            callId: data.callId,
+            sessionId: crypto.randomUUID(),
+            secondsConnected: 0,
+            isMuted: false,
+            isVideoMuted: !data.isVideo,
+            isRemoteScreenSharing: false,
+            isCaller: false
+        }));
+        sessionStorage.setItem('callPartner', JSON.stringify({ ...partner, uid: data.from_uid }));
+        window.location.href = 'index.html';
     }
 
     function toggleThemeModal() {
@@ -800,9 +986,9 @@
                 }
             });
             socket.on('new_message', (msg) => {
-                // If it's from the person we are chatting with
                 if (msg.from_uid === partner.uid) {
                     appendMessage(msg);
+                    socket.emit('mark_seen', { message_id: msg.id, to_uid: partner.uid });
                 }
             });
             
@@ -819,6 +1005,33 @@
                 if (data.by_uid === partner.uid) {
                     updateSeenIndicator(data.message_id);
                 }
+            });
+
+            // ── Incoming call from partner ──
+            socket.on('incoming_call', (data) => {
+                if (data.from_uid === partner.uid) {
+                    showIncomingCallOverlay(data);
+                }
+            });
+
+            // ── Caller: partner rejected ──
+            socket.on('call_rejected', (data) => {
+                clearTimeout(window._callAutoCancel);
+                sessionStorage.removeItem('activeCall');
+                // Append a rejected call log
+                const fakeMsg = {
+                    id: Date.now(),
+                    from_uid: me.uid,
+                    to_uid: partner.uid,
+                    text: JSON.stringify({ type: 'call_log', status: 'rejected', duration: 0 }),
+                    created_at: new Date().toISOString()
+                };
+                appendMessage(fakeMsg);
+            });
+
+            // ── Caller: no one answered (timeout on callee side) ──
+            socket.on('call_missed', (data) => {
+                dismissIncomingCall(true);
             });
         };
         document.body.appendChild(s);

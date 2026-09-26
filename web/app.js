@@ -678,13 +678,16 @@ function cleanupCall(isManual = false) {
         changeAppState('IDLE', 'Ready');
     }
 
-    if (polite && currentCallId) {
+    if (currentCallId) {
         try {
+            const savedCallData = JSON.parse(sessionStorage.getItem('activeCall') || '{}');
+            const isCaller = savedCallData.isCaller === true;
             const pStr = sessionStorage.getItem('callPartner');
             const token = localStorage.getItem('chet_token') || sessionStorage.getItem('chet_token');
-            if (pStr && token) {
+            if (isCaller && pStr && token) {
                 const p = JSON.parse(pStr);
                 const API = window.APP_CONFIG?.SIGNALING_URL || window.location.origin;
+                const status = secondsConnected > 0 ? 'ended' : 'missed';
                 fetch(`${API}/api/messages`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -692,7 +695,7 @@ function cleanupCall(isManual = false) {
                         to_uid: p.uid,
                         text: JSON.stringify({
                             type: 'call_log',
-                            status: secondsConnected > 0 ? 'ended' : 'missed',
+                            status: status,
                             duration: secondsConnected
                         })
                     })
