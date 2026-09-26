@@ -645,12 +645,13 @@
         
         const msgDiv = document.getElementById('msg-' + msgId);
         if (msgDiv) {
+            const wrapper = msgDiv.querySelector('.msg-bubble-wrapper') || msgDiv;
             const seenHTML = `
                 <div class="seen-container">
                     <div class="seen-indicator">${getInitials(partner.first_name, partner.last_name)}</div>
                 </div>
             `;
-            msgDiv.insertAdjacentHTML('beforeend', seenHTML);
+            wrapper.insertAdjacentHTML('beforeend', seenHTML);
             scrollToBottom();
         }
     }
