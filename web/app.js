@@ -145,6 +145,20 @@ function changeAppState(newState, uiMsg) {
 // ─── TURN CREDENTIALS ─────────────────────────────────────────────────────────
 async function fetchTurnCredentials() {
     if (credentialsFetched) return;
+    
+    const cached = sessionStorage.getItem('turn_credentials');
+    if (cached) {
+        try {
+            const data = JSON.parse(cached);
+            if (Date.now() < data.expiry) {
+                rtcConfig = data.rtcConfig;
+                credentialsFetched = true;
+                log('Used cached TURN credentials');
+                return;
+            }
+        } catch(e) {}
+    }
+
     try {
         const res  = await fetch(`${SIGNALING_URL}/api/turn-credentials`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -161,6 +175,12 @@ async function fetchTurnCredentials() {
             ]
         };
         credentialsFetched = true;
+        
+        sessionStorage.setItem('turn_credentials', JSON.stringify({
+            expiry: (data.expiry_timestamp * 1000) - 300000, // 5 minutes before expiry
+            rtcConfig: rtcConfig
+        }));
+        
         log(`TURN credentials fetched, expiry=${data.expiry_timestamp}`);
     } catch (e) {
         log('TURN credential fetch failed:', e.message);
@@ -175,6 +195,7 @@ const RecoveryManager = {
     maxIceRestarts: 3,
     maxRebuilds:    2,
     graceTimer: null,
+    uiWarningTimer: null,
     lock: false,
 
     reset() {
@@ -182,7 +203,9 @@ const RecoveryManager = {
         this.rebuildCount = 0;
         this.lock         = false;
         clearTimeout(this.graceTimer);
+        clearTimeout(this.uiWarningTimer);
         this.graceTimer = null;
+        this.uiWarningTimer = null;
     },
 
     handleOffline() {
@@ -202,8 +225,16 @@ const RecoveryManager = {
     handleDisconnected() {
         if (manualHangup) return;
         log('[RECOVERY] WEBRTC_DISCONNECTED — grace period starting');
-        changeAppState('DEGRADED', 'Connection unstable...');
+        
         clearTimeout(this.graceTimer);
+        clearTimeout(this.uiWarningTimer);
+        
+        this.uiWarningTimer = setTimeout(() => {
+            if (appState !== 'ENDED' && appState !== 'FAILED') {
+                changeAppState('DEGRADED', 'Connection unstable...');
+            }
+        }, 3000);
+        
         this.graceTimer = setTimeout(() => {
             if (pc && !['connected', 'completed'].includes(pc.iceConnectionState)) {
                 this.handleFailed();
