@@ -61,6 +61,9 @@ if (!TURN_SECRET || !TURN_HOST) {
 
 // ─── TURSO DATABASE ──────────────────────────────────────────────────────────
 let db = null;
+let dbReady = false;
+let dbError  = null;
+
 if (TURSO_URL && TURSO_TOKEN) {
     db = createClient({ url: TURSO_URL, authToken: TURSO_TOKEN });
 
@@ -78,8 +81,10 @@ if (TURSO_URL && TURSO_TOKEN) {
                     created_at   TEXT DEFAULT (datetime('now'))
                 )
             `);
+            dbReady = true;
             console.log('[DB] Turso connected and tables ready');
         } catch (e) {
+            dbError = e.message;
             console.error('[DB] Init error:', e.message);
         }
     })();
@@ -101,7 +106,18 @@ function authMiddleware(req, res, next) {
 }
 
 // ─── HEALTH ──────────────────────────────────────────────────────────────────
-app.get('/api/health', (_req, res) => res.json({ ok: true, db: !!db }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, db: !!db, dbReady, dbError: dbError || null }));
+
+// ─── DB TEST ──────────────────────────────────────────────────────────────────
+app.get('/api/db-test', async (_req, res) => {
+    if (!db) return res.json({ ok: false, error: 'No DB client. Check TURSO_DB_URL and TURSO_AUTH_TOKEN env vars.' });
+    try {
+        const r = await db.execute('SELECT 1 as ping');
+        res.json({ ok: true, dbReady, rows: r.rows, dbError });
+    } catch(e) {
+        res.json({ ok: false, error: e.message, dbReady, dbError });
+    }
+});
 
 // ─── TURN CREDENTIALS ────────────────────────────────────────────────────────
 app.get('/api/turn-credentials', (req, res) => {
@@ -151,11 +167,12 @@ app.post('/api/auth/register', async (req, res) => {
         console.log(`[AUTH] Registered uid=${uid} username=${username}`);
         res.json({ token, uid, username: username.toLowerCase(), first_name: first_name.trim(), last_name: last_name.trim() });
     } catch (e) {
-        if (e.message?.includes('UNIQUE')) {
+        if (e.message?.includes('UNIQUE') || e.message?.includes('SQLITE_CONSTRAINT')) {
             res.status(409).json({ error: 'Username or email is already taken' });
         } else {
             console.error('[AUTH] Register error:', e.message);
-            res.status(500).json({ error: 'Registration failed. Please try again.' });
+            // Return actual error for now to help diagnose
+            res.status(500).json({ error: 'Registration failed: ' + e.message });
         }
     }
 });
