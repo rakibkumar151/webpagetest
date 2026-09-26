@@ -486,7 +486,7 @@
 <script>
 const API  = (window.APP_CONFIG && window.APP_CONFIG.SIGNALING_URL) || window.location.origin;
 const token = localStorage.getItem('chet_token');
-const me    = JSON.parse(localStorage.getItem('chet_user') || '{}');
+let me      = JSON.parse(localStorage.getItem('chet_user') || '{}');
 
 let searchTimeout = null;
 let allUsers      = [];
