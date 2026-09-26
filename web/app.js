@@ -49,8 +49,9 @@ let manualHangup = false;
 let isMuted    = false;
 let isVideoMuted = false;
 let currentFacingMode = 'user';
-let isScreenSharing = false;
-let screenStream = null;
+let isScreenSharing  = false;
+let screenStream     = null;
+let isRemoteScreenSharing = false;
 
 let timerInterval    = null;
 let secondsConnected = 0;
@@ -94,7 +95,8 @@ function updateTimerDisplay() {
             sessionId: sessionId,
             secondsConnected: secondsConnected,
             isMuted: isMuted,
-            isVideoMuted: isVideoMuted
+            isVideoMuted: isVideoMuted,
+            isRemoteScreenSharing: isRemoteScreenSharing
         }));
     }
 }
@@ -929,6 +931,7 @@ socket.on('peer_action', (data) => {
             else remoteVideoStatus.classList.add('hidden');
         }
     } else if (data.action === 'screen_share') {
+        isRemoteScreenSharing = data.active;
         if (data.active) {
             remoteVideo.classList.add('is-screen-share');
         } else {
@@ -954,6 +957,7 @@ window.addEventListener('load', async () => {
         secondsConnected = data.secondsConnected || 0;
         isVideoMuted  = data.isVideoMuted !== false;
         isMuted       = data.isMuted || false;
+        isRemoteScreenSharing = data.isRemoteScreenSharing || false;
         RecoveryManager.reset();
 
         // ── Restore UI immediately so it looks like nothing happened ─────────
@@ -963,6 +967,12 @@ window.addEventListener('load', async () => {
         hangupBtn.disabled = false;
         joinBtn.disabled   = true;
 
+        // Restore remote screen share zoom fix
+        if (isRemoteScreenSharing) {
+            remoteVideo.classList.add('is-screen-share');
+        } else {
+            remoteVideo.classList.remove('is-screen-share');
+        }
         if (isVideoMuted) {
             videoBtn.classList.add('active');
             videoBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
