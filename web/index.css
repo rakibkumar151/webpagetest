@@ -130,7 +130,7 @@ input[type="text"]:focus { border-color: var(--primary); }
     left: 0;
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     z-index: 1;
     transform: translateZ(0); /* Force GPU Acceleration */
     will-change: transform;
@@ -166,7 +166,7 @@ input[type="text"]:focus { border-color: var(--primary); }
 #localVideo {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     background: transparent;
 }
 
