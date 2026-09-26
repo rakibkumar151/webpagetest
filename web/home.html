@@ -503,7 +503,7 @@ function initProfile() {
     const init = initials(me);
     
     // Check local storage for avatar
-    const savedAvatar = localStorage.getItem('chet_avatar_' + me.uid);
+    const savedAvatar = me.profile_photo;
     if (savedAvatar) {
         document.getElementById('navAvatar').innerHTML = `<img src="${savedAvatar}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
         document.getElementById('profileAvatarText').style.display = 'none';
@@ -519,6 +519,9 @@ function initProfile() {
     } else {
         document.getElementById('navAvatar').textContent = init;
         document.getElementById('profileAvatarText').textContent = init;
+        document.getElementById('profileAvatarText').style.display = 'block';
+        const img = document.getElementById('profileAvatarImg');
+        if (img) img.remove();
     }
     
     document.getElementById('navName').textContent = me.first_name || me.username;
@@ -570,9 +573,21 @@ function uploadProfilePic(e) {
             
             // Compress and get base64
             const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-            localStorage.setItem('chet_avatar_' + me.uid, dataUrl);
-            initProfile(); // re-render
-            showToast('Profile photo updated!');
+            
+            fetch(API + '/api/users/profile-photo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ profile_photo: dataUrl })
+            }).then(r => r.json()).then(res => {
+                if(res.success) {
+                    me.profile_photo = dataUrl;
+                    localStorage.setItem('chet_user', JSON.stringify(me));
+                    initProfile();
+                    showToast('Profile photo updated!');
+                } else {
+                    showToast('Failed to update photo');
+                }
+            }).catch(e => showToast('Error uploading photo'));
         };
         img.src = evt.target.result;
     };
@@ -636,7 +651,7 @@ function renderUsers(users) {
     list.innerHTML = users.map((u, i) => `
         <div class="user-card" style="animation-delay:${i * 0.04}s" onclick="startCall(${JSON.stringify(u).replace(/"/g, '&quot;')})">
             <div class="avatar" style="background:${getColor(u.uid)}">
-                ${initials(u)}
+                ${u.profile_photo ? `<img src="${u.profile_photo}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;position:absolute;top:0;left:0;">` : initials(u)}
                 <div style="position:absolute; bottom:0; right:0; width:12px; height:12px; border-radius:50%; border:2px solid var(--surface); background:${u.is_online ? '#10b981' : '#6b7280'}"></div>
             </div>
             <div class="user-card-info">
@@ -747,8 +762,16 @@ loadUsers().then(() => {
 
         socket.on('incoming_call', (data) => {
             homeIncomingCall = data;
-            const initials = ((data.caller.first_name||'')[0]||'') + ((data.caller.last_name||'')[0]||'');
-            document.getElementById('incomingCallAvatar').textContent = initials.toUpperCase();
+            
+            if (data.caller.profile_photo) {
+                document.getElementById('incomingCallAvatar').innerHTML = `<img src="${data.caller.profile_photo}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+                document.getElementById('incomingCallAvatar').style.background = 'transparent';
+            } else {
+                const initials = ((data.caller.first_name||'')[0]||'') + ((data.caller.last_name||'')[0]||'');
+                document.getElementById('incomingCallAvatar').innerHTML = initials.toUpperCase();
+                document.getElementById('incomingCallAvatar').style.background = getColor(data.caller.uid);
+            }
+            
             document.getElementById('incomingCallName').textContent = (data.caller.first_name||'') + ' ' + (data.caller.last_name||'');
             document.getElementById('incomingCallType').textContent = data.isVideo ? '📹 Incoming Video Call' : '📞 Incoming Voice Call';
             document.getElementById('callOverlay').classList.add('active');

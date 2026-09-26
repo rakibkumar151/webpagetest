@@ -174,8 +174,14 @@ function showCallingOverlay() {
         const callData = JSON.parse(sessionStorage.getItem('activeCall') || '{}');
         const isCaller = callData.isCaller === true;
         if (isCaller && p.first_name) {
-            const initials = ((p.first_name||'')[0]||'') + ((p.last_name||'')[0]||'');
-            document.getElementById('callingAvatar').textContent = initials.toUpperCase();
+            if (p.profile_photo) {
+                document.getElementById('callingAvatar').innerHTML = `<img src="${p.profile_photo}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+                document.getElementById('callingAvatar').style.background = 'transparent';
+            } else {
+                const initials = ((p.first_name||'')[0]||'') + ((p.last_name||'')[0]||'');
+                document.getElementById('callingAvatar').textContent = initials.toUpperCase();
+                document.getElementById('callingAvatar').style.background = 'linear-gradient(135deg,#7c6cff,#a855f7)';
+            }
             document.getElementById('callingName').textContent = (p.first_name||'') + ' ' + (p.last_name||'');
             document.getElementById('callingType').textContent = callData.isVideoMuted ? '📞 Voice Call' : '📹 Video Call';
             callingOverlay.style.display = 'flex';

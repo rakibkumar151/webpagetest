@@ -539,7 +539,12 @@
     // UI Setup
     document.getElementById('chatPartnerName').textContent = `${partner.first_name || ''} ${partner.last_name || ''}`;
     const initials = (partner.first_name?.[0] || '') + (partner.last_name?.[0] || '');
-    document.getElementById('chatAvatar').textContent = initials || '?';
+    if (partner.profile_photo) {
+        document.getElementById('chatAvatar').innerHTML = `<img src="${partner.profile_photo}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+        document.getElementById('chatAvatar').style.background = 'transparent';
+    } else {
+        document.getElementById('chatAvatar').textContent = initials || '?';
+    }
     
     function formatLastActive(isoString) {
         if (!isoString) return 'Active a long time ago';
@@ -693,7 +698,11 @@
 
         let avatarHtml = '';
         if (!isMe && payload.type === 'call_log') {
-            avatarHtml = `<div class="chat-avatar" style="width:28px; height:28px; font-size:12px; margin-right:8px; flex-shrink:0; align-self:flex-end;">${getInitials(partner.first_name, partner.last_name)}</div>`;
+            if (partner.profile_photo) {
+                avatarHtml = `<div class="chat-avatar" style="width:28px; height:28px; margin-right:8px; flex-shrink:0; align-self:flex-end; background:transparent;"><img src="${partner.profile_photo}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>`;
+            } else {
+                avatarHtml = `<div class="chat-avatar" style="width:28px; height:28px; font-size:12px; margin-right:8px; flex-shrink:0; align-self:flex-end;">${getInitials(partner.first_name, partner.last_name)}</div>`;
+            }
         }
 
         row.innerHTML = `
@@ -837,7 +846,7 @@
                 to_uid: partner.uid,
                 callId: data.callId,
                 isVideo: isVideo,
-                caller: { first_name: me.first_name, last_name: me.last_name, uid: me.uid }
+                caller: { first_name: me.first_name, last_name: me.last_name, uid: me.uid, profile_photo: me.profile_photo }
             }));
 
             // Signal the callee — wait for emit ack before navigating
@@ -848,7 +857,7 @@
             if (socket && socket.connected) {
                 socket.emit('incoming_call', {
                     to_uid: partner.uid,
-                    caller: { first_name: me.first_name, last_name: me.last_name, uid: me.uid },
+                    caller: { first_name: me.first_name, last_name: me.last_name, uid: me.uid, profile_photo: me.profile_photo },
                     callId: data.callId,
                     isVideo: isVideo
                 }, () => doNavigate()); // use ack callback to navigate only after server confirms
@@ -875,7 +884,13 @@
 
     function showIncomingCallOverlay(data) {
         activeIncomingCall = data;
-        document.getElementById('incomingCallAvatar').textContent = getInitials(data.caller.first_name, data.caller.last_name);
+        if (data.caller.profile_photo) {
+            document.getElementById('incomingCallAvatar').innerHTML = `<img src="${data.caller.profile_photo}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+            document.getElementById('incomingCallAvatar').style.background = 'transparent';
+        } else {
+            document.getElementById('incomingCallAvatar').textContent = getInitials(data.caller.first_name, data.caller.last_name);
+            document.getElementById('incomingCallAvatar').style.background = 'linear-gradient(135deg, var(--accent1), var(--accent2))';
+        }
         document.getElementById('incomingCallName').textContent = (data.caller.first_name || '') + ' ' + (data.caller.last_name || '');
         document.getElementById('incomingCallType').textContent = data.isVideo ? '📹 Incoming Video Call' : '📞 Incoming Voice Call';
         document.getElementById('callOverlay').classList.add('active');

@@ -34,7 +34,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '5mb' }));
 
 // ─── RATE LIMITING ───────────────────────────────────────────────────────────
 const apiLimiter = rateLimit({
@@ -79,7 +79,8 @@ if (TURSO_URL && TURSO_TOKEN) {
                     email        TEXT UNIQUE NOT NULL,
                     password_hash TEXT NOT NULL,
                     created_at   TEXT DEFAULT (datetime('now')),
-                    last_active  TEXT DEFAULT NULL
+                    last_active  TEXT DEFAULT NULL,
+                    profile_photo TEXT DEFAULT NULL
                 )
             `);
             await db.execute(`
@@ -94,6 +95,7 @@ if (TURSO_URL && TURSO_TOKEN) {
             `);
             // Add columns safely to existing tables
             try { await db.execute(`ALTER TABLE users ADD COLUMN last_active TEXT DEFAULT NULL`); } catch(e) {}
+            try { await db.execute(`ALTER TABLE users ADD COLUMN profile_photo TEXT DEFAULT NULL`); } catch(e) {}
             try { await db.execute(`ALTER TABLE messages ADD COLUMN read_at TEXT DEFAULT NULL`); } catch(e) {}
             
             dbReady = true;
@@ -226,7 +228,7 @@ app.post('/api/auth/login', async (req, res) => {
         if (!valid) return res.status(401).json({ error: 'Invalid email/username or password' });
         const token = jwt.sign({ uid: user.uid, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
         console.log(`[AUTH] Login uid=${user.uid}`);
-        res.json({ token, uid: user.uid, username: user.username, first_name: user.first_name, last_name: user.last_name });
+        res.json({ token, uid: user.uid, username: user.username, first_name: user.first_name, last_name: user.last_name, profile_photo: user.profile_photo });
     } catch (e) {
         console.error('[AUTH] Login error:', e.message);
         res.status(500).json({ error: 'Login failed. Please try again.' });
@@ -238,7 +240,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });
     try {
         const result = await db.execute({
-            sql: `SELECT uid, username, first_name, last_name, email, created_at FROM users WHERE uid = ? LIMIT 1`,
+            sql: `SELECT uid, username, first_name, last_name, email, created_at, profile_photo FROM users WHERE uid = ? LIMIT 1`,
             args: [req.user.uid]
         });
         if (!result.rows.length) return res.status(404).json({ error: 'User not found' });
@@ -274,12 +276,35 @@ app.get('/api/users', authMiddleware, async (req, res) => {
             first_name: u.first_name,
             last_name: u.last_name,
             last_active: u.last_active || null,
+            profile_photo: u.profile_photo || null,
             is_online: globalUserSockets.has(u.uid)
         }));
         res.json(users);
     } catch (e) {
         console.error('[USERS] List error:', e.message);
         res.status(500).json({ error: 'Failed to load users' });
+    }
+});
+
+// ─── USERS: UPDATE PROFILE PHOTO ─────────────────────────────────────────────
+app.post('/api/users/profile-photo', authMiddleware, async (req, res) => {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { profile_photo } = req.body;
+    
+    // basic validation
+    if (profile_photo && profile_photo.length > 5 * 1024 * 1024) {
+        return res.status(400).json({ error: 'Image too large' });
+    }
+
+    try {
+        await db.execute({
+            sql: `UPDATE users SET profile_photo = ? WHERE uid = ?`,
+            args: [profile_photo || null, req.user.uid]
+        });
+        res.json({ success: true });
+    } catch (e) {
+        console.error('[USERS] Profile photo upload error:', e.message);
+        res.status(500).json({ error: 'Failed to update profile photo' });
     }
 });
 
