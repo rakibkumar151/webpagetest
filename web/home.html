@@ -513,16 +513,16 @@ function formatLastActive(isoString) {
         else isoString = isoString + 'Z';
     }
     const diff = Math.floor((new Date() - new Date(isoString)) / 1000);
-    if (diff < 60) return \`Active \${Math.max(1, diff)}s ago\`;
+    if (diff < 60) return `Active ${Math.max(1, diff)}s ago`;
     const m = Math.floor(diff / 60);
-    if (m < 60) return \`Active \${m}m ago\`;
+    if (m < 60) return `Active ${m}m ago`;
     const h = Math.floor(m / 60);
-    if (h < 24) return \`Active \${h}h ago\`;
+    if (h < 24) return `Active ${h}h ago`;
     const days = Math.floor(h / 24);
-    if (days < 30) return \`Active \${days}d ago\`;
+    if (days < 30) return `Active ${days}d ago`;
     const mo = Math.floor(days / 30);
-    if (mo < 12) return \`Active \${mo}mo ago\`;
-    return \`Active \${Math.floor(mo / 12)}y ago\`;
+    if (mo < 12) return `Active ${mo}mo ago`;
+    return `Active ${Math.floor(mo / 12)}y ago`;
 }
 
 async function loadUsers(q = '') {
