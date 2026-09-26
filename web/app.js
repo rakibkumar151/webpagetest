@@ -163,6 +163,30 @@ function startStatsMonitor() {
 }
 
 // ─── STATE MACHINE ────────────────────────────────────────────────────────────
+const callingOverlay = document.getElementById('callingOverlay');
+
+function showCallingOverlay() {
+    if (!callingOverlay) return;
+    try {
+        const p = JSON.parse(sessionStorage.getItem('callPartner') || '{}');
+        const callData = JSON.parse(sessionStorage.getItem('activeCall') || '{}');
+        const isCaller = callData.isCaller === true;
+        if (isCaller && p.first_name) {
+            const initials = ((p.first_name||'')[0]||'') + ((p.last_name||'')[0]||'');
+            document.getElementById('callingAvatar').textContent = initials.toUpperCase();
+            document.getElementById('callingName').textContent = (p.first_name||'') + ' ' + (p.last_name||'');
+            document.getElementById('callingType').textContent = callData.isVideoMuted ? '📞 Voice Call' : '📹 Video Call';
+            callingOverlay.style.display = 'flex';
+            return;
+        }
+    } catch(e) {}
+    callingOverlay.style.display = 'none';
+}
+
+function hideCallingOverlay() {
+    if (callingOverlay) callingOverlay.style.display = 'none';
+}
+
 function changeAppState(newState, uiMsg) {
     if (manualHangup && newState !== 'ENDED' && newState !== 'IDLE') return;
     appState = newState;
@@ -172,10 +196,14 @@ function changeAppState(newState, uiMsg) {
     document.body.dataset.state = newState;
 
     if (newState === 'CONNECTED') {
+        hideCallingOverlay();
         startTimer();
         startStatsMonitor();
         qualityIndicator.classList.remove('hidden');
+    } else if (newState === 'CONNECTING') {
+        showCallingOverlay();
     } else if (['ENDED', 'FAILED', 'IDLE'].includes(newState)) {
+        hideCallingOverlay();
         stopTimer();
         clearInterval(statsInterval);
         statsInterval = null;
@@ -1082,17 +1110,35 @@ window.addEventListener('load', async () => {
 
         await fetchTurnCredentials();
         try {
-            localStream = await navigator.mediaDevices.getUserMedia({
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-                video: false
-            });
+            if (!isVideoMuted) {
+                // Video call — request camera + mic
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                    video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24 } }
+                });
+                localVideo.srcObject = localStream;
+                localVideo.classList.add('pip-active');
+                const lc = document.querySelector('.local-video-container');
+                if (lc) lc.style.display = 'block';
+                switchCameraBtn.disabled = false;
+            } else {
+                // Audio-only call — mic only
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                    video: false
+                });
+                localVideo.srcObject = localStream;
+                localVideo.classList.remove('pip-active');
+            }
         } catch (err) {
-            log('Mic access failed on reload:', err.message);
+            log('Media access failed on load:', err.message);
+            // Fallback to audio only
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            } catch (e) { log('Audio fallback also failed', e.message); }
         }
 
         if (localStream) {
-            localVideo.srcObject = localStream;
-            localVideo.classList.remove('pip-active');
             if (isMuted) localStream.getAudioTracks().forEach(t => { t.enabled = false; });
         }
 
