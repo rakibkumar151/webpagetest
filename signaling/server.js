@@ -172,6 +172,11 @@ io.on('connection', (socket) => {
         console.log(`[ROOM] call_end callId=${data.callId} by=${socket.id}`);
     });
 
+    socket.on('peer_action', (data) => {
+        if (!data || !data.callId) return;
+        socket.to(data.callId).emit('peer_action', data);
+    });
+
     socket.on('disconnecting', () => {
         const callId = socket.data.callId;
         if (callId) {

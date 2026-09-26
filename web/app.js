@@ -333,6 +333,11 @@ muteBtn.addEventListener('click', () => {
     track.enabled = !isMuted;
     muteBtn.classList.toggle('active', isMuted);
     
+    // Notify peer
+    if (currentCallId) {
+        socket.emit('peer_action', { callId: currentCallId, action: 'mute_audio', muted: isMuted });
+    }
+    
     // Update SVG icon color/shape or keep simple active state for now
     if (isMuted) {
         muteBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>`;
@@ -383,6 +388,11 @@ videoBtn.addEventListener('click', async () => {
             videoBtn.classList.add('active');
             showError('Could not restart camera');
         }
+    }
+    
+    // Notify peer
+    if (currentCallId) {
+        socket.emit('peer_action', { callId: currentCallId, action: 'mute_video', muted: isVideoMuted });
     }
 });
 
@@ -475,6 +485,11 @@ function cleanupCall(isManual = false) {
     joinBtn.disabled   = false;
     hangupBtn.disabled = true;
     if (remoteVideo) remoteVideo.srcObject = null;
+    
+    const remoteVideoStatus = document.getElementById('remoteVideoStatus');
+    const remoteMicStatus = document.getElementById('remoteMicStatus');
+    if (remoteVideoStatus) remoteVideoStatus.classList.add('hidden');
+    if (remoteMicStatus) remoteMicStatus.classList.add('hidden');
 
     setTimeout(() => switchScreen('join'), isManual ? 1500 : 2500);
 }
@@ -645,4 +660,20 @@ socket.on('call_end', () => {
     log('Peer ended call');
     changeAppState('ENDED', 'Call ended by peer');
     cleanupCall(false);
+});
+
+socket.on('peer_action', (data) => {
+    if (data.action === 'mute_audio') {
+        const remoteMicStatus = document.getElementById('remoteMicStatus');
+        if (remoteMicStatus) {
+            if (data.muted) remoteMicStatus.classList.remove('hidden');
+            else remoteMicStatus.classList.add('hidden');
+        }
+    } else if (data.action === 'mute_video') {
+        const remoteVideoStatus = document.getElementById('remoteVideoStatus');
+        if (remoteVideoStatus) {
+            if (data.muted) remoteVideoStatus.classList.remove('hidden');
+            else remoteVideoStatus.classList.add('hidden');
+        }
+    }
 });
