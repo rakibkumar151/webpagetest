@@ -86,6 +86,17 @@ function updateTimerDisplay() {
     const m = Math.floor(secondsConnected / 60).toString().padStart(2, '0');
     const s = (secondsConnected % 60).toString().padStart(2, '0');
     callTimer.textContent = `${m}:${s}`;
+    
+    // Auto-save state for seamless reload
+    if (currentCallId) {
+        sessionStorage.setItem('activeCall', JSON.stringify({
+            callId: currentCallId,
+            sessionId: sessionId,
+            secondsConnected: secondsConnected,
+            isMuted: isMuted,
+            isVideoMuted: isVideoMuted
+        }));
+    }
 }
 
 function startTimer() {
@@ -926,35 +937,55 @@ window.addEventListener('load', async () => {
             
             currentCallId = data.callId;
             manualHangup = false;
-            secondsConnected = 0;
+            secondsConnected = data.secondsConnected || 0;
+            isVideoMuted = data.isVideoMuted !== undefined ? data.isVideoMuted : true;
+            isMuted = data.isMuted || false;
+            
             updateTimerDisplay();
             RecoveryManager.reset();
             
             joinBtn.disabled = true;
             await fetchTurnCredentials();
             
-            localStream = await navigator.mediaDevices.getUserMedia({
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-                video: false
-            });
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                    video: !isVideoMuted
+                });
+            } catch (err) {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                isVideoMuted = true;
+            }
             
-            isVideoMuted = true;
-            videoBtn.classList.add('active'); 
-            videoBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+            if (isMuted) {
+                const track = localStream.getAudioTracks()[0];
+                if (track) { track.enabled = false; track.stop(); }
+                muteBtn.classList.add('active');
+                muteBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>`;
+            }
             
-            const localContainer = document.querySelector('.local-video-container');
-            if (localContainer) localContainer.style.display = 'none';
+            if (isVideoMuted) {
+                videoBtn.classList.add('active'); 
+                videoBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+                const localContainer = document.querySelector('.local-video-container');
+                if (localContainer) localContainer.style.display = 'none';
+                switchCameraBtn.disabled = true;
+            } else {
+                const localContainer = document.querySelector('.local-video-container');
+                if (localContainer) localContainer.style.display = 'block';
+                switchCameraBtn.disabled = false;
+            }
+            
             localVideo.srcObject = localStream;
             localVideo.classList.remove('pip-active');
             videoBtn.disabled = false;
-            switchCameraBtn.disabled = true;
             
             if (!navigator.mediaDevices.getDisplayMedia) {
                 screenShareBtn.style.display = 'none';
             }
             
             switchScreen('call');
-            changeAppState('RECONNECTING', 'Restoring call...');
+            changeAppState('CONNECTED', 'Connected'); // Instantly look connected!
             hangupBtn.disabled = false;
             
             if (socket.connected) {
