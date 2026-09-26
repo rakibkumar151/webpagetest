@@ -6,7 +6,15 @@
         if (saved) {
             const d = JSON.parse(saved);
             if (d && d.callId) {
-                // Hide join screen immediately, show call screen
+                const js = document.getElementById('joinScreen');
+                const cs = document.getElementById('callScreen');
+                if (js) { js.classList.remove('active'); js.style.display = 'none'; }
+                if (cs) { cs.classList.add('active'); }
+            }
+        } else {
+            // If callId in URL, hide join screen immediately (will auto-join on load)
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('callId')) {
                 const js = document.getElementById('joinScreen');
                 const cs = document.getElementById('callScreen');
                 if (js) { js.classList.remove('active'); js.style.display = 'none'; }
@@ -725,8 +733,10 @@ function cleanupCall(isManual = false) {
 
     sessionStorage.removeItem('activeCall');
 
-    setTimeout(() => switchScreen('join'), isManual ? 1500 : 2500);
+    // Go back to home — never show join screen again
+    setTimeout(() => { window.location.replace('home.html'); }, isManual ? 1000 : 2000);
 }
+
 
 // ─── REBUILD ──────────────────────────────────────────────────────────────────
 function rebuildConnection() {
@@ -964,35 +974,43 @@ socket.on('peer_action', (data) => {
 // ─── AUTO-REJOIN ON RELOAD ────────────────────────────────────────────────────
 window.addEventListener('load', async () => {
     const savedCall = sessionStorage.getItem('activeCall');
-    if (!savedCall) return;
-    
+
+    // ── Case 1: Fresh call from home page (URL has callId, no saved session) ──
+    if (!savedCall) {
+        const params = new URLSearchParams(window.location.search);
+        const urlCallId = params.get('callId');
+        if (urlCallId) {
+            // auto-join without showing the join screen
+            const inp = document.getElementById('callIdInput');
+            if (inp) inp.value = urlCallId;
+            document.getElementById('joinBtn').click();
+        }
+        return;
+    }
+
+    // ── Case 2: Reload with existing session ─────────────────────────────────
     try {
         const data = JSON.parse(savedCall);
-        if (!data.callId || !data.sessionId) { sessionStorage.removeItem('activeCall'); return; }
+        if (!data.callId || !data.sessionId) { sessionStorage.removeItem('activeCall'); window.location.replace('home.html'); return; }
 
-        // ── Restore state variables ──────────────────────────────────────────
-        currentCallId = data.callId;
-        sessionId     = data.sessionId;   // reuse same sessionId!
-        manualHangup  = false;
+        currentCallId    = data.callId;
+        sessionId        = data.sessionId;
+        manualHangup     = false;
         secondsConnected = data.secondsConnected || 0;
-        isVideoMuted  = data.isVideoMuted !== false;
-        isMuted       = data.isMuted || false;
+        isVideoMuted     = data.isVideoMuted !== false;
+        isMuted          = data.isMuted || false;
         isRemoteScreenSharing = data.isRemoteScreenSharing || false;
         RecoveryManager.reset();
 
-        // ── Restore UI immediately so it looks like nothing happened ─────────
         updateTimerDisplay();
         switchScreen('call');
         changeAppState('CONNECTED', 'Connected');
         hangupBtn.disabled = false;
         joinBtn.disabled   = true;
 
-        // Restore remote screen share zoom fix
-        if (isRemoteScreenSharing) {
-            remoteVideo.classList.add('is-screen-share');
-        } else {
-            remoteVideo.classList.remove('is-screen-share');
-        }
+        if (isRemoteScreenSharing) remoteVideo.classList.add('is-screen-share');
+        else                        remoteVideo.classList.remove('is-screen-share');
+
         if (isVideoMuted) {
             videoBtn.classList.add('active');
             videoBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
@@ -1013,52 +1031,47 @@ window.addEventListener('load', async () => {
         videoBtn.disabled = false;
         if (!navigator.mediaDevices.getDisplayMedia) screenShareBtn.style.display = 'none';
 
-        // ── Get mic access fresh ─────────────────────────────────────────────
         await fetchTurnCredentials();
         try {
             localStream = await navigator.mediaDevices.getUserMedia({
                 audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-                video: false   // always audio-only on reload; video re-enabled by user
+                video: false
             });
         } catch (err) {
             log('Mic access failed on reload:', err.message);
         }
-        
+
         if (localStream) {
             localVideo.srcObject = localStream;
             localVideo.classList.remove('pip-active');
-            if (isMuted) {
-                localStream.getAudioTracks().forEach(t => { t.enabled = false; });
-            }
+            if (isMuted) localStream.getAudioTracks().forEach(t => { t.enabled = false; });
         }
 
-        // ── Wait for socket then emit resume_call ────────────────────────────
         const doResume = () => {
             log('[RELOAD] Emitting resume_call callId=' + currentCallId);
             socket.emit('resume_call', { callId: currentCallId, sessionId }, (res) => {
                 if (res && res.status === 'resume_ok') {
                     log('[RELOAD] resume_ok — setting up WebRTC as POLITE peer');
-                    polite = true;   // reloading peer is always polite (waits for offer)
-                    setupWebRTC();   // creates pc and adds local tracks
-                    // The server will emit peer_connected to the other side which
-                    // triggers their rebuildConnection() → they send the offer → we answer
+                    polite = true;
+                    setupWebRTC();
                 } else {
-                    log('[RELOAD] resume_failed — session gone');
+                    log('[RELOAD] resume_failed — session gone, going home');
                     changeAppState('FAILED', 'Session expired.');
                     sessionStorage.removeItem('activeCall');
-                    setTimeout(() => switchScreen('join'), 2000);
+                    setTimeout(() => window.location.replace('home.html'), 1500);
                 }
             });
         };
 
-        if (socket.connected) {
-            doResume();
-        } else {
-            socket.once('connect', doResume);
-        }
+        if (socket.connected) doResume();
+        else socket.once('connect', doResume);
 
     } catch (e) {
         log('Auto-restore failed:', e.message);
         sessionStorage.removeItem('activeCall');
+        window.location.replace('home.html');
     }
 });
+
+
+
