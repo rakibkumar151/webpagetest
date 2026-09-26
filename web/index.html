@@ -20,21 +20,6 @@
                 window.location.replace('auth.html');
             }
         } catch(e) {}
-        // Auto-fill callId from URL param ?callId=...
-        window.addEventListener('DOMContentLoaded', function() {
-            try {
-                const params = new URLSearchParams(window.location.search);
-                const callId = params.get('callId');
-                if (callId) {
-                    const inp = document.getElementById('callIdInput');
-                    if (inp) inp.value = callId;
-                    // Auto-click Join if arriving from home page
-                    if (!sessionStorage.getItem('activeCall')) {
-                        setTimeout(function() { document.getElementById('joinBtn').click(); }, 300);
-                    }
-                }
-            } catch(e) {}
-        });
     </script>
 </head>
 <body data-state="IDLE">
@@ -42,8 +27,7 @@
     <script>
     (function(){
         var hasActive = !!sessionStorage.getItem('activeCall');
-        var hasCallId = !!(new URLSearchParams(window.location.search).get('callId'));
-        if (hasActive || hasCallId) {
+        if (hasActive) {
             // Will be on call screen — hide join screen before paint
             document.write('<style>#joinScreen{display:none!important}#callScreen{display:block!important}</style>');
         }

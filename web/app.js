@@ -975,20 +975,13 @@ socket.on('peer_action', (data) => {
 window.addEventListener('load', async () => {
     const savedCall = sessionStorage.getItem('activeCall');
 
-    // ── Case 1: Fresh call from home page (URL has callId, no saved session) ──
     if (!savedCall) {
-        const params = new URLSearchParams(window.location.search);
-        const urlCallId = params.get('callId');
-        if (urlCallId) {
-            // auto-join without showing the join screen
-            const inp = document.getElementById('callIdInput');
-            if (inp) inp.value = urlCallId;
-            document.getElementById('joinBtn').click();
-        }
+        // No active call session — back to home page
+        window.location.replace('home.html');
         return;
     }
 
-    // ── Case 2: Reload with existing session ─────────────────────────────────
+    // ── Restore existing session ─────────────────────────────────
     try {
         const data = JSON.parse(savedCall);
         if (!data.callId || !data.sessionId) { sessionStorage.removeItem('activeCall'); window.location.replace('home.html'); return; }

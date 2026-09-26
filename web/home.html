@@ -428,16 +428,36 @@ function getCallId(uidA, uidB) {
     return sorted[0] + '_' + sorted[1];
 }
 
-function startCall(user) {
-    const callId = getCallId(me.uid, user.uid);
-    sessionStorage.setItem('activeCall', JSON.stringify({
-        callId, sessionId: crypto.randomUUID(),
-        secondsConnected: 0, isMuted: false, isVideoMuted: true, isRemoteScreenSharing: false
-    }));
-    // Store call partner info
-    sessionStorage.setItem('callPartner', JSON.stringify(user));
-    window.location.href = 'index.html?callId=' + encodeURIComponent(callId);
+async function startCall(user) {
+    const token = localStorage.getItem('chet_token');
+    try {
+        const r = await fetch(`${API}/api/calls/initiate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ target_uid: user.uid })
+        });
+        if (r.status === 401) { logout(); return; }
+        if (!r.ok) { showToast('Failed to start call. Try again.'); return; }
+        const data = await r.json();
+
+        // Store in sessionStorage ONLY — callId never goes in the URL
+        sessionStorage.setItem('activeCall', JSON.stringify({
+            callId: data.callId,
+            sessionId: data.sessionId,
+            secondsConnected: 0,
+            isMuted: false,
+            isVideoMuted: true,
+            isRemoteScreenSharing: false
+        }));
+        sessionStorage.setItem('callPartner', JSON.stringify(user));
+
+        // Navigate without callId in URL
+        window.location.href = 'index.html';
+    } catch(e) {
+        showToast('Connection error. Check your internet.');
+    }
 }
+
 
 function renderUsers(users) {
     const list = document.getElementById('userList');

@@ -119,6 +119,24 @@ app.get('/api/db-test', async (_req, res) => {
     }
 });
 
+// ─── CALLS: INITIATE ─────────────────────────────────────────────────────────
+// Authenticated endpoint — generates a secure random callId server-side.
+// callId is NEVER derived from UIDs so it can't be guessed or replayed.
+// The caller stores it in sessionStorage only — never exposed in the URL.
+app.post('/api/calls/initiate', authMiddleware, (req, res) => {
+    const { target_uid } = req.body;
+    if (!target_uid || typeof target_uid !== 'string') {
+        return res.status(400).json({ error: 'target_uid required' });
+    }
+    // 128-bit random — unguessable, no UID fingerprint
+    const callId    = crypto.randomBytes(16).toString('hex');
+    const sessionId = crypto.randomBytes(12).toString('hex');
+    console.log(`[CALL] initiated by=${req.user.uid} target=${target_uid} callId=${callId.slice(0,8)}…`);
+    res.json({ callId, sessionId });
+});
+
+
+
 // ─── TURN CREDENTIALS ────────────────────────────────────────────────────────
 app.get('/api/turn-credentials', (req, res) => {
     res.set('Cache-Control', 'no-store');
