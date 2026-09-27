@@ -820,19 +820,7 @@ io.on('connection', (socket) => {
     });
     socket.on('peer_action',   (data) => { if (!data?.callId) return; socket.to(data.callId).emit('peer_action', data); });
 
-    socket.on('screenshot_taken', (data) => {
-        if (!data || !data.target_uid) return;
-        const sSet = globalUserSockets.get(data.target_uid);
-        if (sSet) {
-            for (let sId of sSet) {
-                io.to(sId).emit('partner_took_screenshot', { 
-                    by_uid: socket.data.uid, 
-                    by_name: data.sender_name || 'Someone' 
-                });
-            }
-        }
-        console.log(`[SECURITY] screenshot_taken by=${socket.data.uid} target=${data.target_uid}`);
-    });
+
 
     socket.on('disconnecting', () => {
         // Remove from global chat map
