@@ -20,11 +20,11 @@
             const callPartner = JSON.parse(sessionStorage.getItem('callPartner') || 'null');
             const chatPartner = JSON.parse(sessionStorage.getItem('chatPartner') || 'null');
 
-            if (window.location.pathname.includes('index.html') && callPartner) {
+            if (window.location.href.includes('index.html') && callPartner) {
                 targetUid = callPartner.uid;
-            } else if (window.location.pathname.includes('chat.html') && chatPartner) {
+            } else if (window.location.href.includes('chat.html') && chatPartner) {
                 targetUid = chatPartner.uid;
-            } else if (window.location.pathname.includes('profile.html')) {
+            } else if (window.location.href.includes('profile.html')) {
                 const pId = sessionStorage.getItem('profileViewUid');
                 if (pId) targetUid = pId;
             }
@@ -53,23 +53,10 @@
         }
     });
 
-    // 2. Mobile Heuristics
-    // Browsers don't natively tell us about OS screenshots.
-    // The closest heuristic is that taking a screenshot often blurs or briefly backgrounds the webview on mobile.
-    let blurTimeout;
-    window.addEventListener('blur', () => {
-        blurTimeout = setTimeout(() => {
-            // If it was just a split-second blur (like a screenshot OS popup)
-            // we could trigger it, but for now blur is enough.
-            handleScreenshot();
-        }, 50);
-    });
-    
-    document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-            handleScreenshot();
-        }
-    });
+    // Note: Mobile Heuristics (blur/visibilitychange) were removed because they cause massive 
+    // false positives (e.g. triggering when a native call or notification arrives).
+    // It is technically impossible to accurately detect OS screenshots on mobile via Web APIs.
+
 
     // 3. Listen for partner's screenshot
     function setupListener() {
