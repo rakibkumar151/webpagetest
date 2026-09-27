@@ -663,7 +663,7 @@
     
     function openProfile() {
         sessionStorage.setItem('profileViewUid', partner.uid);
-        window.location.href = 'profile.html?from=chat';
+        window.location.href = `profile.html?uid=${partner.uid}&from=chat`;
     }
 
     
