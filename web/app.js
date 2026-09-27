@@ -38,6 +38,7 @@ const socket = io(SIGNALING_URL, {
     randomizationFactor: 0.5,
     timeout: 10000
 });
+window.socket = socket;
 
 // ─── DOM REFS ─────────────────────────────────────────────────────────────────
 const joinScreen        = document.getElementById('joinScreen');

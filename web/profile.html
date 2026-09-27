@@ -1506,6 +1506,7 @@
             s.src = API + '/socket.io/socket.io.js';
             s.onload = function() {
                 socket = io(API, { transports: ['websocket', 'polling'] });
+                window.socket = socket;
                 socket.on('connect', () => socket.emit('register_user', token));
                 
                 socket.on('profile_updated', (updatedUser) => {
