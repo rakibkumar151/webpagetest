@@ -576,11 +576,11 @@
 </div>
 
 <nav>
-    <button class="back-btn" onclick="window.location.href='home.html'">
+    <button class="back-btn" onclick="if(window.history.length > 1 && document.referrer) window.history.back(); else window.location.replace('home.html');">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
         Back
     </button>
-    <div class="chat-header-user">
+    <div class="chat-header-user" onclick="openProfile()" style="cursor: pointer;">
         <div class="chat-avatar" id="chatAvatar">?</div>
         <div class="chat-name-container">
             <div class="chat-name" id="chatPartnerName" style="display:flex;align-items:center;gap:3px;">Loading...</div>
@@ -660,6 +660,12 @@
         window.location.replace('home.html');
     }
     const partner = JSON.parse(partnerStr);
+    
+    function openProfile() {
+        sessionStorage.setItem('profileViewUid', partner.uid);
+        window.location.href = 'profile.html?from=chat';
+    }
+
     
     // UI Setup
     function setPartnerNameWithBadge() {

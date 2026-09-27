@@ -704,7 +704,7 @@
             <img class="cover-img" id="coverImgEl" src="" alt="Cover photo">
             <div class="cover-overlay"></div>
             <div class="cover-actions">
-                <button class="icon-btn" onclick="window.location.href='home.html'" title="Back to Home">
+                <button class="icon-btn" onclick="goBack()" title="Back">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
                 </button>
                 <button class="icon-btn" id="settingsBtn" onclick="openEditModal()" title="Settings">
@@ -1485,6 +1485,19 @@
             if (!currentProfileData) return;
             sessionStorage.setItem('chatPartner', JSON.stringify(currentProfileData));
             window.location.href = 'chat.html';
+        }
+
+        function goBack() {
+            if (window.history.length > 1 && document.referrer) {
+                window.history.back();
+            } else {
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('from') === 'chat') {
+                    window.location.replace('chat.html');
+                } else {
+                    window.location.replace('home.html');
+                }
+            }
         }
 
         // Realtime Sockets
