@@ -194,7 +194,7 @@
         .call-card-pro {
             display: flex;
             flex-direction: column;
-            width: 240px;
+            width: clamp(200px, 65vw, 235px); /* Responsive: Medium size on PC, auto shrinks on small mobile */
             font-family: inherit;
         }
         .call-card-body {
