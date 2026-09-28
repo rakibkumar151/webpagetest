@@ -787,6 +787,16 @@ io.on('connection', (socket) => {
             for (let sId of socketIds) {
                 io.to(sId).emit('call_rejected', { by_uid: socket.data.uid });
             }
+    });
+
+    socket.on('call_busy', (data) => {
+        // data: { to_uid }
+        if (!socket.data.uid) return;
+        if (globalUserSockets.has(data.to_uid)) {
+            const socketIds = globalUserSockets.get(data.to_uid);
+            for (let sId of socketIds) {
+                io.to(sId).emit('call_busy', { by_uid: socket.data.uid });
+            }
         }
     });
 

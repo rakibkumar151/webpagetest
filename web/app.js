@@ -1026,9 +1026,33 @@ socket.on('incoming_call', (data) => {
 
         // 2. BUSY: We are already on a call, and someone (same or different) is calling us again.
         log('[CALL] Busy. Rejecting incoming call from ' + data.from_uid);
-        socket.emit('call_reject', { to_uid: data.from_uid });
+        socket.emit('call_busy', { to_uid: data.from_uid });
         return;
     }
+});
+
+socket.on('call_busy', async () => {
+    log('[CALL] Callee is busy on another call');
+    await saveCallLogToDB('rejected', 0); // Log it as rejected/missed
+    sessionStorage.removeItem('activeCall');
+    manualHangup = true;
+    manualHangup_logSaved = true;
+    if (pc) { pc.close(); pc = null; }
+    if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+    stopTimer();
+    
+    alert("They are currently talking to someone else. Please try calling again later.");
+    
+    // Go back to chat with this partner
+    try {
+        const partner = JSON.parse(sessionStorage.getItem('callPartner') || 'null');
+        if (partner && partner.uid) {
+            sessionStorage.setItem('chatPartner', JSON.stringify(partner));
+            window.location.replace('chat.html');
+            return;
+        }
+    } catch(e) {}
+    window.location.replace('home.html');
 });
 
 socket.on('disconnect', (reason) => {
