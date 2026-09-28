@@ -7,6 +7,23 @@ const rateLimit = require('express-rate-limit');
 const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
 const { createClient } = require('@libsql/client');
+const nodemailer = require('nodemailer');
+
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: 'rakibkumar151@gmail.com',
+        pass: 'zias mvxf mtax rxbx'
+    }
+});
+
+const otpStore = new Map(); // email -> { otp, data, expiresAt }
+setInterval(() => {
+    const now = Date.now();
+    for (const [email, entry] of otpStore.entries()) {
+        if (now > entry.expiresAt) otpStore.delete(email);
+    }
+}, 60000);
 
 const app = express();
 
@@ -268,23 +285,69 @@ app.post('/api/auth/register', async (req, res) => {
         return res.status(400).json({ error: 'Username: 3-20 chars, letters/numbers/underscore only' });
     }
     try {
+        const existing = await db.execute({
+            sql: `SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1`,
+            args: [username.toLowerCase(), email.toLowerCase().trim()]
+        });
+        if (existing.rows.length > 0) {
+            return res.status(409).json({ error: 'Username or email is already taken' });
+        }
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digit OTP
         const password_hash = await bcrypt.hash(password, 12);
+        
+        otpStore.set(email.toLowerCase().trim(), {
+            otp,
+            data: { username: username.toLowerCase(), first_name: first_name.trim(), last_name: last_name.trim(), email: email.toLowerCase().trim(), password_hash },
+            expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes
+        });
+
+        await transporter.sendMail({
+            from: 'Chet <rakibkumar151@gmail.com>',
+            to: email.toLowerCase().trim(),
+            subject: 'Your Chet Verification Code',
+            text: `Your verification code is: ${otp}\n\nThis code expires in 10 minutes.`,
+            html: `<h3>Welcome to Chet!</h3><p>Your verification code is: <b style="font-size:24px; color:#7c6cff">${otp}</b></p><p>This code expires in 10 minutes.</p>`
+        });
+
+        res.json({ success: true, requireOtp: true, message: 'OTP sent to your email.' });
+    } catch (e) {
+        console.error('[AUTH] Register error:', e.message);
+        res.status(500).json({ error: 'Failed to send OTP email: ' + e.message });
+    }
+});
+
+// ─── AUTH: VERIFY OTP ────────────────────────────────────────────────────────
+app.post('/api/auth/verify-otp', async (req, res) => {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ error: 'Email and OTP required' });
+    
+    const record = otpStore.get(email.toLowerCase().trim());
+    if (!record || record.otp !== otp || Date.now() > record.expiresAt) {
+        return res.status(400).json({ error: 'Invalid or expired OTP' });
+    }
+    
+    try {
+        const { username, first_name, last_name, password_hash } = record.data;
         const uid = 'UID' + Math.floor(1000000 + Math.random() * 9000000);
         await db.execute({
             sql: `INSERT INTO users (uid, username, first_name, last_name, email, password_hash)
                   VALUES (?, ?, ?, ?, ?, ?)`,
-            args: [uid, username.toLowerCase(), first_name.trim(), last_name.trim(), email.toLowerCase().trim(), password_hash]
+            args: [uid, username, first_name, last_name, email.toLowerCase().trim(), password_hash]
         });
-        const token = jwt.sign({ uid, username: username.toLowerCase() }, JWT_SECRET, { expiresIn: '30d' });
-        console.log(`[AUTH] Registered uid=${uid} username=${username}`);
-        res.json({ token, uid, username: username.toLowerCase(), first_name: first_name.trim(), last_name: last_name.trim(), is_verified: false });
+        
+        otpStore.delete(email.toLowerCase().trim()); // Clean up OTP
+        
+        const token = jwt.sign({ uid, username }, JWT_SECRET, { expiresIn: '30d' });
+        console.log(`[AUTH] Registered & Verified uid=${uid} username=${username}`);
+        res.json({ token, uid, username, first_name, last_name, is_verified: false });
     } catch (e) {
         if (e.message?.includes('UNIQUE') || e.message?.includes('SQLITE_CONSTRAINT')) {
             res.status(409).json({ error: 'Username or email is already taken' });
         } else {
-            console.error('[AUTH] Register error:', e.message);
-            // Return actual error for now to help diagnose
-            res.status(500).json({ error: 'Registration failed: ' + e.message });
+            console.error('[AUTH] OTP verify error:', e.message);
+            res.status(500).json({ error: 'Verification failed: ' + e.message });
         }
     }
 });

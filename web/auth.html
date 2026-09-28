@@ -300,6 +300,17 @@
         </div>
         <button type="submit" class="submit-btn" id="registerBtn">Create Account</button>
     </form>
+
+    <!-- OTP VERIFICATION -->
+    <form class="form" id="otpForm" onsubmit="doVerifyOtp(event)" autocomplete="off">
+        <div id="otpMsg" class="msg" style="display:block; background:rgba(124,108,255,0.1); border:1px solid var(--accent1); color:var(--accent1); margin-bottom:12px;">We sent a 6-digit verification code to your email.</div>
+        <div class="field">
+            <label>Verification Code</label>
+            <input type="text" id="otpCode" placeholder="Enter 6-digit code" required pattern="[0-9]{6}" maxlength="6" autocomplete="off" style="text-align:center; font-size:20px; letter-spacing:4px;">
+        </div>
+        <button type="submit" class="submit-btn" id="otpBtn">Verify & Login</button>
+        <div style="text-align:center; margin-top:12px;"><a href="#" onclick="switchTab('register')" style="color:var(--muted); font-size:12px; text-decoration:none;">&larr; Back to Register</a></div>
+    </form>
 </div>
 
 <script>
@@ -308,10 +319,12 @@ const API = (window.APP_CONFIG && window.APP_CONFIG.SIGNALING_URL) || window.loc
 function switchTab(tab) {
     document.getElementById('loginForm').classList.toggle('active', tab === 'login');
     document.getElementById('registerForm').classList.toggle('active', tab === 'register');
+    document.getElementById('otpForm').classList.toggle('active', tab === 'otp');
     document.getElementById('loginTab').classList.toggle('active', tab === 'login');
-    document.getElementById('registerTab').classList.toggle('active', tab === 'register');
+    document.getElementById('registerTab').classList.toggle('active', (tab === 'register' || tab === 'otp'));
     document.getElementById('loginMsg').className = 'msg';
     document.getElementById('registerMsg').className = 'msg';
+    document.getElementById('otpMsg').className = 'msg';
 }
 
 function setMsg(id, text, type) {
@@ -386,12 +399,42 @@ async function doRegister(e) {
         });
         const data = await r.json();
         if (!r.ok) { setMsg('registerMsg', data.error || 'Registration failed.', 'error'); return; }
-        saveAndRedirect(data);
+        
+        if (data.requireOtp) {
+            switchTab('otp');
+            document.getElementById('otpCode').focus();
+        } else {
+            saveAndRedirect(data);
+        }
     } catch(err) {
         console.error('[REGISTER] fetch error:', err);
         setMsg('registerMsg', 'Server unreachable. Make sure backend is deployed and running.', 'error');
     } finally {
         setLoading('registerBtn', false);
+    }
+}
+
+async function doVerifyOtp(e) {
+    e.preventDefault();
+    const email = document.getElementById('regEmail').value.trim();
+    const otp = document.getElementById('otpCode').value.trim();
+    if (!email || !otp) return;
+    
+    setLoading('otpBtn', true);
+    try {
+        const r = await fetch(`${API}/api/auth/verify-otp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, otp })
+        });
+        const data = await r.json();
+        if (!r.ok) { setMsg('otpMsg', data.error || 'Verification failed.', 'error'); return; }
+        saveAndRedirect(data);
+    } catch(err) {
+        console.error('[OTP] fetch error:', err);
+        setMsg('otpMsg', 'Server unreachable. Please try again.', 'error');
+    } finally {
+        setLoading('otpBtn', false);
     }
 }
 </script>
