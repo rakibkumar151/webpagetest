@@ -887,14 +887,27 @@
             </div>
         `;
 
+        const isTemp = String(msg.id).startsWith('temp_');
+        const isRead = !!msg.read_at;
+        let statusStr = isTemp ? 'Pending' : (isRead ? 'Seen' : 'Delivered');
+        
+        let statusHtml = '';
+        if (payload.type !== 'call_log') {
+            if (isMe) {
+                statusHtml = `<div class="msg-status-text hidden" id="status-${msg.id}" style="font-size:11px; margin-top:2px; color:rgba(255,255,255,0.5); text-align:right; margin-right:4px;">${statusStr} &bull; ${formatTime(msg.created_at)}</div>`;
+            } else {
+                statusHtml = `<div class="msg-status-text hidden" id="status-${msg.id}" style="font-size:11px; margin-top:2px; color:rgba(255,255,255,0.5); margin-left:4px;">${formatTime(msg.created_at)}</div>`;
+            }
+        }
+
         row.innerHTML = `
-            <div id="msg-${msg.id}" class="msg-content-wrapper" oncontextmenu="toggleReactionMobile(event, this)">
+            <div id="msg-${msg.id}" class="msg-content-wrapper" oncontextmenu="e.preventDefault()">
                 ${reactionsBarHTML}
                 ${avatarHtml}
                 <div class="msg-bubble-wrapper">
                     ${replyPreviewHtml}
                     <div class="msg-bubble" style="${payload.type === 'call_log' ? 'padding: 12px; ' : ''}${payload.type === 'call_log' && isMe ? 'background: var(--msg-recv) !important; color: var(--text) !important;' : ''}">${contentHtml}</div>
-                    ${payload.type === 'call_log' ? '' : `<div class="msg-time">${formatTime(msg.created_at)}</div>`}
+                    ${statusHtml}
                     <div class="msg-reactions hidden" id="reactions-${msg.id}"></div>
                 </div>
             </div>
@@ -914,17 +927,35 @@
         let touchStartY = 0;
         let touchCurrentX = 0;
         let isSwipingRight = false;
+        let isLongPress = false;
         const wrapper = row.querySelector('.msg-content-wrapper');
+        const bubble = wrapper.querySelector('.msg-bubble');
         
+        // Desktop long press
+        wrapper.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+            isLongPress = false;
+            pressTimer = setTimeout(() => {
+                isLongPress = true;
+                wrapper.querySelector('.reactions-bar').classList.add('active');
+            }, 800);
+        });
+        wrapper.addEventListener('mouseup', (e) => {
+            clearTimeout(pressTimer);
+        });
+        
+        // Mobile touch swipe & long press
         wrapper.addEventListener('touchstart', (e) => {
             touchStartX = e.touches[0].clientX;
             touchStartY = e.touches[0].clientY;
             isSwipingRight = false;
+            isLongPress = false;
             pressTimer = setTimeout(() => {
+                isLongPress = true;
                 e.preventDefault();
                 wrapper.querySelector('.reactions-bar').classList.add('active');
                 if(window.navigator.vibrate) window.navigator.vibrate(50);
-            }, 500);
+            }, 800);
         });
         wrapper.addEventListener('touchmove', (e) => {
             clearTimeout(pressTimer);
@@ -1312,6 +1343,12 @@
                     // Update DOM ID to real ID from DB
                     const el = document.getElementById('msg-' + tempMsg.id);
                     if (el) el.id = 'msg-' + res.message.id;
+                    
+                    const st = document.getElementById('status-' + tempMsg.id);
+                    if (st) {
+                        st.id = 'status-' + res.message.id;
+                        st.innerHTML = st.innerHTML.replace('Pending', 'Delivered');
+                    }
                 }
             });
         } else {
@@ -1473,6 +1510,11 @@
             socket.on('message_seen', (data) => {
                 if (data.by_uid === partner.uid) {
                     updateSeenIndicator(data.message_id);
+                    
+                    const st = document.getElementById('status-' + data.message_id);
+                    if (st) {
+                        st.innerHTML = st.innerHTML.replace('Delivered', 'Seen').replace('Pending', 'Seen');
+                    }
                 }
             });
             
