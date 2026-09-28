@@ -991,6 +991,45 @@ socket.on('call_ringing', () => {
     }
 });
 
+socket.on('incoming_call', (data) => {
+    // If we are already in an active or connecting call:
+    if (appState !== 'IDLE' && appState !== 'ENDED' && appState !== 'FAILED') {
+        const partner = JSON.parse(sessionStorage.getItem('callPartner') || '{}');
+        
+        // 1. GLARE (Collision): We are calling someone, and they are calling us at the exact same time
+        if (appState === 'CONNECTING' && partner.uid === data.from_uid) {
+            log('[CALL] Collision detected! Resolving glare by UID comparison...');
+            const myUid = JSON.parse(localStorage.getItem('chet_user') || '{}').uid;
+            
+            // Tie-breaker: The one with the lexicographically smaller UID yields and accepts the other's call
+            if (myUid && myUid < data.from_uid) {
+                log('[CALL] I yield. Accepting their incoming call automatically.');
+                if (window._callerWatchdog) clearTimeout(window._callerWatchdog);
+                
+                socket.emit('call_accepted', { to_uid: data.from_uid, callId: data.callId });
+                sessionStorage.setItem('activeCall', JSON.stringify({
+                    callId: data.callId,
+                    sessionId: crypto.randomUUID(),
+                    secondsConnected: 0,
+                    isMuted: false,
+                    isVideoMuted: !data.isVideo,
+                    isRemoteScreenSharing: false,
+                    isCaller: false
+                }));
+                // Reload to seamlessly switch from CALLER to CALLEE
+                window.location.reload();
+            } else {
+                log('[CALL] I win the collision. Ignoring their incoming call and waiting for them to yield.');
+            }
+            return;
+        }
+
+        // 2. BUSY: We are already on a call, and someone (same or different) is calling us again.
+        log('[CALL] Busy. Rejecting incoming call from ' + data.from_uid);
+        socket.emit('call_reject', { to_uid: data.from_uid });
+        return;
+    }
+});
 
 socket.on('disconnect', (reason) => {
     log('Signaling disconnected:', reason);
