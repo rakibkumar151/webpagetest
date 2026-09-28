@@ -907,9 +907,11 @@
                 ${avatarHtml}
                 <div class="msg-bubble-wrapper">
                     ${replyPreviewHtml}
-                    <div class="msg-bubble" style="${payload.type === 'call_log' ? 'padding: 12px; ' : ''}${payload.type === 'call_log' && isMe ? 'background: var(--msg-recv) !important; color: var(--text) !important;' : ''}">${contentHtml}</div>
+                    <div class="msg-bubble" style="${payload.type === 'call_log' ? 'padding: 12px; ' : ''}${payload.type === 'call_log' && isMe ? 'background: var(--msg-recv) !important; color: var(--text) !important;' : ''}">
+                        ${contentHtml}
+                        <div class="msg-reactions hidden" id="reactions-${msg.id}"></div>
+                    </div>
                     ${statusHtml}
-                    <div class="msg-reactions hidden" id="reactions-${msg.id}"></div>
                 </div>
             </div>
         `;
