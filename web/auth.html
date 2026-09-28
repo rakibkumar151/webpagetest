@@ -15,7 +15,7 @@
         // Redirect if already logged in
         try {
             if (localStorage.getItem('chet_token') && localStorage.getItem('chet_user')) {
-                window.location.replace('home.html');
+                window.location.replace('index.html');
             }
         } catch(e) {}
     </script>
@@ -153,6 +153,7 @@
             letter-spacing: 0.6px;
         }
         .field input {
+            width: 100%;
             background: rgba(255,255,255,0.05);
             border: 1px solid var(--border);
             border-radius: 10px;
@@ -340,7 +341,7 @@ function saveAndRedirect(data) {
         profile_photo: data.profile_photo,
         is_verified: data.is_verified
     }));
-    window.location.replace('home.html');
+    window.location.replace('index.html');
 }
 
 async function doLogin(e) {
