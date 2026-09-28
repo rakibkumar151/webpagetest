@@ -13,7 +13,7 @@ const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
         user: 'rakibkumar151@gmail.com',
-        pass: 'zias mvxf mtax rxbx'
+        pass: 'ziasmvxfmtaxrxbx'
     }
 });
 
@@ -302,13 +302,13 @@ app.post('/api/auth/register', async (req, res) => {
             expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes
         });
 
-        await transporter.sendMail({
+        transporter.sendMail({
             from: 'Chet <rakibkumar151@gmail.com>',
             to: email.toLowerCase().trim(),
             subject: 'Your Chet Verification Code',
             text: `Your verification code is: ${otp}\n\nThis code expires in 10 minutes.`,
             html: `<h3>Welcome to Chet!</h3><p>Your verification code is: <b style="font-size:24px; color:#7c6cff">${otp}</b></p><p>This code expires in 10 minutes.</p>`
-        });
+        }).catch(err => console.error('[AUTH] Email send failed:', err.message));
 
         res.json({ success: true, requireOtp: true, message: 'OTP sent to your email.' });
     } catch (e) {
