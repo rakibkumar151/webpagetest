@@ -1294,18 +1294,42 @@
             payload.reply_to = replyingTo;
             cancelReply();
         }
-        try {
-            const res = await fetch(`${API}/api/messages`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                body: JSON.stringify({ to_uid: partner.uid, text: JSON.stringify(payload) })
+        
+        // Optimistic UI Update (Super fast)
+        const tempMsg = {
+            id: 'temp_' + Date.now(),
+            from_uid: me.uid,
+            to_uid: partner.uid,
+            text: JSON.stringify(payload),
+            created_at: new Date().toISOString()
+        };
+        appendMessage(tempMsg);
+        
+        // Push via TCP/Websocket
+        if (socket && socket.connected) {
+            socket.emit('send_message', { to_uid: partner.uid, text: JSON.stringify(payload) }, (res) => {
+                if (res && res.success) {
+                    // Update DOM ID to real ID from DB
+                    const el = document.getElementById('msg-' + tempMsg.id);
+                    if (el) el.id = 'msg-' + res.message.id;
+                }
             });
-            if (res.ok) {
-                const newMsg = await res.json();
-                appendMessage(newMsg);
+        } else {
+            // Fallback to HTTP if socket is disconnected
+            try {
+                const res = await fetch(`${API}/api/messages`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ to_uid: partner.uid, text: JSON.stringify(payload) })
+                });
+                if (res.ok) {
+                    const savedMsg = await res.json();
+                    const el = document.getElementById('msg-' + tempMsg.id);
+                    if (el) el.id = 'msg-' + savedMsg.id;
+                }
+            } catch(e) {
+                console.error('HTTP Send fallback failed', e);
             }
-        } catch(e) {
-            console.error(e);
         }
     }
 

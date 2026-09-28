@@ -734,7 +734,47 @@ io.on('connection', (socket) => {
                 console.error('[CHAT] add_reaction error:', e.message);
             }
         }
+        }
     });
+
+    // ─── SUPER FAST TCP MESSAGE SEND ──────────────────────────────────────────
+    socket.on('send_message', async (data, ack) => {
+        const from_uid = socket.data.uid;
+        if (!from_uid || !data.to_uid || !data.text) return;
+        
+        try {
+            // 1. Immediately save to DB to get the real ID
+            const encrypted = encryptMessage(data.text);
+            const result = await db.execute({
+                sql: `INSERT INTO messages (from_uid, to_uid, encrypted_text) VALUES (?, ?, ?) RETURNING id, created_at`,
+                args: [from_uid, data.to_uid, encrypted]
+            });
+            
+            const newMsg = {
+                id: result.rows[0].id,
+                from_uid,
+                to_uid: data.to_uid,
+                text: data.text,
+                created_at: result.rows[0].created_at,
+                reactions: null
+            };
+
+            // 2. Push to receiver instantly via TCP/WebSocket
+            if (globalUserSockets.has(data.to_uid)) {
+                const socketIds = globalUserSockets.get(data.to_uid);
+                for (let sId of socketIds) {
+                    io.to(sId).emit('new_message', newMsg);
+                }
+            }
+            
+            // 3. Return ack to sender instantly
+            if (typeof ack === 'function') ack({ success: true, message: newMsg });
+        } catch(e) {
+            console.error('[CHAT] send_message error:', e.message);
+            if (typeof ack === 'function') ack({ success: false, error: e.message });
+        }
+    });
+
     // ─── INCOMING CALL SIGNAL ──────────────────────────────────────────────────
     socket.on('incoming_call', (data, ack) => {
         // data: { to_uid, caller, callId, isVideo }
