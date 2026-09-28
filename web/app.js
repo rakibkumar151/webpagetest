@@ -1174,11 +1174,57 @@ socket.on('peer_action', (data) => {
 window.addEventListener('load', async () => {
     const savedCall = sessionStorage.getItem('activeCall');
     const incomingCallStr = sessionStorage.getItem('incomingCallToAnswer');
+    
+    // ── GLARE RESOLUTION ON LOAD ──
+    // If BOTH activeCall (outgoing) and incomingCallToAnswer are present, a collision happened!
+    if (savedCall && incomingCallStr) {
+        try {
+            const outData = JSON.parse(savedCall);
+            const inData = JSON.parse(incomingCallStr);
+            const partner = JSON.parse(sessionStorage.getItem('callPartner') || '{}');
+            const myUid = JSON.parse(localStorage.getItem('chet_user') || '{}').uid;
+            
+            // If they are calling each other
+            if (outData.isCaller && partner.uid === inData.from_uid && myUid) {
+                log('[GLARE] Load-time collision detected!');
+                if (myUid < inData.from_uid) {
+                    // I yield. I discard my outgoing call and AUTO-ACCEPT their incoming call.
+                    log('[GLARE] I yield. Auto-accepting their call.');
+                    sessionStorage.removeItem('incomingCallToAnswer'); // We won't show the overlay
+                    
+                    const acceptTheirCall = () => {
+                        socket.emit('call_accepted', { to_uid: inData.from_uid, callId: inData.callId });
+                        sessionStorage.setItem('activeCall', JSON.stringify({
+                            callId: inData.callId,
+                            sessionId: crypto.randomUUID(),
+                            secondsConnected: 0,
+                            isMuted: false,
+                            isVideoMuted: !inData.isVideo,
+                            isRemoteScreenSharing: false,
+                            isCaller: false
+                        }));
+                        window.location.reload();
+                    };
+                    
+                    if (socket.connected) acceptTheirCall();
+                    else socket.once('connect', acceptTheirCall);
+                    
+                    return; // Stop execution here, we are reloading anyway!
+                } else {
+                    // I win. I discard their incoming call and proceed as CALLER.
+                    log('[GLARE] I win. Acting as caller, ignoring their call.');
+                    sessionStorage.removeItem('incomingCallToAnswer');
+                }
+            }
+        } catch(e) {}
+    }
 
-    if (incomingCallStr) {
+    // Re-check incomingCallStr after glare resolution
+    const finalIncomingCallStr = sessionStorage.getItem('incomingCallToAnswer');
+    if (finalIncomingCallStr) {
         // We arrived here as a CALLEE because chat.html/home.html redirected us
         try {
-            const data = JSON.parse(incomingCallStr);
+            const data = JSON.parse(finalIncomingCallStr);
             sessionStorage.removeItem('incomingCallToAnswer'); // prevent loop on reload
             
             // Wait for socket to connect then emit call_ringing so caller knows we are on this screen
