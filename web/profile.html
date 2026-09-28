@@ -1488,15 +1488,11 @@
         }
 
         function goBack() {
-            if (window.history.length > 1 && document.referrer) {
-                window.history.back();
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('from') === 'chat') {
+                window.location.href = 'chat.html';
             } else {
-                const urlParams = new URLSearchParams(window.location.search);
-                if (urlParams.get('from') === 'chat') {
-                    window.location.replace('chat.html');
-                } else {
-                    window.location.replace('home.html');
-                }
+                window.location.href = 'index.html';
             }
         }
 
