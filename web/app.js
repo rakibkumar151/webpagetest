@@ -1212,6 +1212,9 @@ window.addEventListener('load', async () => {
     }
 
     if (!savedCall) {
+        window.location.replace('home.html');
+        return;
+    }
 
     // ── Restore existing session ─────────────────────────────────
     try {
