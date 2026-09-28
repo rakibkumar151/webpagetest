@@ -1151,9 +1151,76 @@
     
     // --- CALLS & THEMES ---
     let activeIncomingCall = null; // { callId, from_uid, isVideo }
-    let incomingCallTimer = null;
+    let outgoingCallData = null;
+    let inlineCallTimeout = null;
+
+    function removeInlineBanner() {
+        const b = document.getElementById('activeCallBanner');
+        if (b) b.remove();
+        clearTimeout(inlineCallTimeout);
+    }
+
+    function showInlineCall(isCaller, data) {
+        removeInlineBanner();
+        const title = isCaller ? 'Calling...' : (data.isVideo ? 'Incoming Video Call' : 'Incoming Voice Call');
+        const acceptBtn = isCaller ? '' : `<button class="call-btn-action" style="background:#10b981; border:none; color:#fff; display:flex; align-items:center; justify-content:center; gap:5px; padding: 8px 16px; border-radius: 8px; font-weight:600; cursor:pointer;" onclick="acceptCall()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg><span>Accept</span></button>`;
+        const cancelBtn = `<button class="call-btn-action" style="background:#ef4444; border:none; color:#fff; display:flex; align-items:center; justify-content:center; gap:5px; padding: 8px 16px; border-radius: 8px; font-weight:600; cursor:pointer;" onclick="${isCaller ? 'cancelOutgoingCall()' : 'rejectCall()'}">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="23" y1="1" x2="1" y2="23"></line></svg><span>${isCaller ? 'Cancel' : 'Decline'}</span></button>`;
+
+        const html = `
+            <div class="msg-content-wrapper" id="activeCallBanner" style="animation: bounceIn 0.3s ease-out; margin: 15px 0;">
+                <div class="msg-bubble-wrapper" style="width: 100%">
+                    <div style="background: rgba(124,108,255,0.08); border: 1px solid var(--accent1); border-radius: 16px; padding: 15px; width: 100%; box-shadow: 0 4px 15px rgba(0,0,0,0.1); position: relative; overflow: hidden;">
+                        <div style="position:absolute; top:0; left:0; right:0; bottom:0; background: var(--accent1); opacity: 0.1; animation: pulseCall 1.5s infinite alternate;"></div>
+                        <div style="display: flex; align-items: center; justify-content: space-between; position: relative; z-index: 1;">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div style="width: 44px; height: 44px; border-radius: 50%; background: var(--accent1); color: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px var(--accent1); flex-shrink: 0;">
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                                </div>
+                                <div>
+                                    <div style="font-weight: 700; font-size: 15px;">${title}</div>
+                                    <div style="font-size: 13px; color: var(--accent1); font-weight: 600; margin-top:2px;">Ringing...</div>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                ${acceptBtn}
+                                ${cancelBtn}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.getElementById('msgsArea').insertAdjacentHTML('beforeend', html);
+        scrollToBottom();
+
+        if (!document.getElementById('callAnimStyle')) {
+            document.head.insertAdjacentHTML('beforeend', '<style id="callAnimStyle">@keyframes pulseCall { from { opacity: 0; } to { opacity: 0.2; } }</style>');
+        }
+
+        inlineCallTimeout = setTimeout(() => {
+            if (isCaller) {
+                if (socket && socket.connected) socket.emit('call_no_answer', { to_uid: partner.uid });
+                saveCallLog('missed', 0);
+                outgoingCallData = null;
+            }
+            removeInlineBanner();
+            dismissIncomingCall(true);
+        }, 30000);
+    }
+
+    function cancelOutgoingCall() {
+        if (outgoingCallData && socket && socket.connected) {
+            socket.emit('call_no_answer', { to_uid: partner.uid });
+            saveCallLog('missed', 0);
+        }
+        outgoingCallData = null;
+        removeInlineBanner();
+    }
 
     async function startCall(isVideo) {
+        if (activeIncomingCall || outgoingCallData) return;
         try {
             const r = await fetch(`${API}/api/calls/initiate`, {
                 method: 'POST',
@@ -1166,7 +1233,7 @@
 
             const currentMe = JSON.parse(localStorage.getItem('chet_user') || '{}');
             
-            sessionStorage.setItem('activeCall', JSON.stringify({
+            outgoingCallData = {
                 callId: data.callId,
                 sessionId: data.sessionId,
                 secondsConnected: 0,
@@ -1174,43 +1241,24 @@
                 isVideoMuted: !isVideo,
                 isRemoteScreenSharing: false,
                 isCaller: true
-            }));
+            };
             sessionStorage.setItem('callPartner', JSON.stringify(partner));
-            // Save caller info so home.html can also signal
-            sessionStorage.setItem('callerInfo', JSON.stringify({
-                to_uid: partner.uid,
-                callId: data.callId,
-                isVideo: isVideo,
-                caller: { first_name: currentMe.first_name, last_name: currentMe.last_name, uid: currentMe.uid, profile_photo: currentMe.profile_photo }
-            }));
-
-        // Signal the callee — navigate only after server confirms delivery
-            const doNavigate = (() => {
-                let navigated = false;
-                return () => { if (!navigated) { navigated = true; window.location.href = 'index.html'; } };
-            })();
-
+            
             if (socket && socket.connected) {
                 socket.emit('incoming_call', {
                     to_uid: partner.uid,
                     caller: { first_name: currentMe.first_name, last_name: currentMe.last_name, uid: currentMe.uid, profile_photo: currentMe.profile_photo },
                     callId: data.callId,
                     isVideo: isVideo
-                }, (ack) => {
-                    if (ack && ack.ok) {
-                        doNavigate();
-                    } else {
-                        // Receiver offline — navigate anyway, caller screen shows ringing
-                        setTimeout(doNavigate, 800);
-                    }
                 });
-                // Hard fallback — navigate after 2s regardless
-                setTimeout(doNavigate, 2000);
+                showInlineCall(true, { isVideo: isVideo });
             } else {
-                doNavigate();
+                alert('You are offline.');
+                outgoingCallData = null;
             }
         } catch(e) {
             alert('Connection error. Check your internet.');
+            outgoingCallData = null;
         }
     }
 
@@ -1239,25 +1287,24 @@
         document.getElementById('incomingCallType').textContent = data.isVideo ? '📹 Incoming Video Call' : '📞 Incoming Voice Call';
         document.getElementById('callOverlay').classList.add('active');
         
-        // Progress bar countdown 20s
+        // Progress bar countdown 30s
         const fill = document.getElementById('callTimerFill');
         fill.style.transition = 'none';
         fill.style.width = '100%';
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-                fill.style.transition = 'width 20s linear';
+                fill.style.transition = 'width 30s linear';
                 fill.style.width = '0%';
             });
         });
         
-        incomingCallTimer = setTimeout(() => dismissIncomingCall(true), 20000);
+        showInlineCall(false, data); // Adds banner AND manages the 30s timeout
     }
 
     function dismissIncomingCall(wasMissed = false) {
-        clearTimeout(incomingCallTimer);
-        incomingCallTimer = null;
         document.getElementById('callOverlay').classList.remove('active');
         activeIncomingCall = null;
+        removeInlineBanner();
     }
 
     function rejectCall() {
@@ -1270,11 +1317,13 @@
 
     function acceptCall() {
         if (!activeIncomingCall) return;
-        clearTimeout(incomingCallTimer);
-        incomingCallTimer = null;
+        if (socket && socket.connected) {
+            socket.emit('call_accepted', { to_uid: activeIncomingCall.from_uid, callId: activeIncomingCall.callId });
+        }
         const data = activeIncomingCall;
         activeIncomingCall = null;
         document.getElementById('callOverlay').classList.remove('active');
+        removeInlineBanner();
         
         // Join the call as recipient
         sessionStorage.setItem('activeCall', JSON.stringify({
@@ -1567,16 +1616,32 @@
                 renderReactions(data.message_id, data.reactions);
             });
 
-            // ── Incoming call from partner ──
+            // ── Call Events ──
             socket.on('incoming_call', (data) => {
                 if (data.from_uid === partner.uid) {
                     showIncomingCallOverlay(data);
                 }
             });
 
+            socket.on('call_accepted', (data) => {
+                if (outgoingCallData && outgoingCallData.callId === data.callId) {
+                    sessionStorage.setItem('activeCall', JSON.stringify(outgoingCallData));
+                    window.location.href = 'index.html';
+                }
+            });
+
+            socket.on('call_rejected', (data) => {
+                if (outgoingCallData) {
+                    saveCallLog('rejected', 0);
+                    outgoingCallData = null;
+                    removeInlineBanner();
+                }
+                dismissIncomingCall(true);
+            });
+
             // ── call_missed: callee's overlay auto-dismiss when caller timed out ──
             socket.on('call_missed', () => {
-                dismissIncomingCall();
+                dismissIncomingCall(true);
             });
 
             // ── Real-time profile photo update ──

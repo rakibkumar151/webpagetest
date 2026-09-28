@@ -790,6 +790,17 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('call_accepted', (data) => {
+        // data: { to_uid, callId }
+        if (!socket.data.uid) return;
+        if (globalUserSockets.has(data.to_uid)) {
+            const socketIds = globalUserSockets.get(data.to_uid);
+            for (let sId of socketIds) {
+                io.to(sId).emit('call_accepted', { by_uid: socket.data.uid, callId: data.callId });
+            }
+        }
+    });
+
     socket.on('call_no_answer', (data) => {
         // data: { to_uid } — caller notifies callee it timed out
         if (!socket.data.uid) return;
