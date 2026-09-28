@@ -734,7 +734,6 @@ io.on('connection', (socket) => {
                 console.error('[CHAT] add_reaction error:', e.message);
             }
         }
-        }
     });
 
     // ─── SUPER FAST TCP MESSAGE SEND ──────────────────────────────────────────
