@@ -618,12 +618,32 @@ const io = new Server(server, {
         methods: ['GET', 'POST']
     },
     transports: ['websocket', 'polling'],
-    pingInterval: 10000,
-    pingTimeout:  5000
+    pingInterval: 8000,
+    pingTimeout:  4000,
+    connectTimeout: 10000,
+    upgradeTimeout: 10000
 });
 
-const roomSessions = new Map();
+const roomSessions   = new Map();
 const globalUserSockets = new Map(); // Map<uid, Set<socketId>>
+
+// Pending calls: if receiver is offline, queue the call for 30s
+// Map<to_uid, { data, expiresAt, timeout }>
+const pendingCalls = new Map();
+
+function deliverPendingCall(uid) {
+    if (!pendingCalls.has(uid)) return;
+    const pending = pendingCalls.get(uid);
+    clearTimeout(pending.timeout);
+    pendingCalls.delete(uid);
+    if (Date.now() < pending.expiresAt && globalUserSockets.has(uid)) {
+        const socketIds = globalUserSockets.get(uid);
+        for (let sId of socketIds) {
+            io.to(sId).emit('incoming_call', pending.data);
+        }
+        console.log(`[CALL] Delivered pending call to ${uid} on reconnect`);
+    }
+}
 
 io.on('connection', (socket) => {
     console.log(`[SOCKET] connect   id=${socket.id}`);
@@ -641,6 +661,9 @@ io.on('connection', (socket) => {
             }
             globalUserSockets.get(user.uid).add(socket.id);
             console.log(`[SOCKET] Registered user ${user.uid} on socket ${socket.id}`);
+
+            // Deliver pending call if any
+            deliverPendingCall(user.uid);
         } catch(e) {
             console.error('[SOCKET] register_user failed: Invalid token');
         }
@@ -728,6 +751,30 @@ io.on('connection', (socket) => {
                 });
                 delivered = true;
             }
+            // Clear any existing pending call for this uid (stale)
+            if (pendingCalls.has(data.to_uid)) {
+                clearTimeout(pendingCalls.get(data.to_uid).timeout);
+                pendingCalls.delete(data.to_uid);
+            }
+        } else {
+            // Receiver offline — queue call for 30s
+            const callPayload = {
+                from_uid: socket.data.uid,
+                caller: data.caller,
+                callId: data.callId,
+                isVideo: data.isVideo
+            };
+            const QUEUE_TTL = 30000;
+            if (pendingCalls.has(data.to_uid)) {
+                clearTimeout(pendingCalls.get(data.to_uid).timeout);
+            }
+            const expireTimeout = setTimeout(() => pendingCalls.delete(data.to_uid), QUEUE_TTL);
+            pendingCalls.set(data.to_uid, {
+                data: callPayload,
+                expiresAt: Date.now() + QUEUE_TTL,
+                timeout: expireTimeout
+            });
+            console.log(`[CALL] Receiver ${data.to_uid} offline — queued call for 30s`);
         }
         if (typeof ack === 'function') ack({ ok: delivered });
     });

@@ -630,6 +630,13 @@ function getCallId(uidA, uidB) {
 
 async function startCall(user) {
     const token = localStorage.getItem('chet_token');
+    const socket = window._homeSocket;
+
+    if (!socket || !socket.connected) {
+        showToast('Connecting... please try again in a moment.', 3000);
+        return;
+    }
+
     try {
         const r = await fetch(`${API}/api/calls/initiate`, {
             method: 'POST',
@@ -640,7 +647,6 @@ async function startCall(user) {
         if (!r.ok) { showToast('Failed to start call. Try again.'); return; }
         const data = await r.json();
 
-        // Store in sessionStorage ONLY — callId never goes in the URL
         sessionStorage.setItem('activeCall', JSON.stringify({
             callId: data.callId,
             sessionId: data.sessionId,
@@ -651,17 +657,36 @@ async function startCall(user) {
             isCaller: true
         }));
         sessionStorage.setItem('callPartner', JSON.stringify(user));
-        
-        // Notify the recipient
+        sessionStorage.setItem('callerInfo', JSON.stringify({
+            to_uid: user.uid,
+            callId: data.callId,
+            isVideo: false,
+            caller: { first_name: me.first_name, last_name: me.last_name, uid: me.uid, profile_photo: me.profile_photo }
+        }));
+
+        // Emit with ack — only navigate if server confirms signal was delivered
+        let navigated = false;
+        const navigateToCall = () => {
+            if (!navigated) { navigated = true; window.location.href = 'index.html'; }
+        };
+
         socket.emit('incoming_call', {
             to_uid: user.uid,
             caller: me,
             callId: data.callId,
             isVideo: false
+        }, (ack) => {
+            if (ack && ack.ok) {
+                navigateToCall();
+            } else {
+                // Receiver socket not connected — still navigate, caller screen will handle timeout
+                showToast('User may be offline — calling anyway...', 2500);
+                setTimeout(navigateToCall, 800);
+            }
         });
 
-        // Navigate without callId in URL
-        window.location.href = 'index.html';
+        // Hard fallback: navigate after 2s regardless
+        setTimeout(navigateToCall, 2000);
     } catch(e) {
         showToast('Connection error. Check your internet.');
     }
@@ -788,17 +813,34 @@ fetch(`${API}/api/auth/me`, { headers: { Authorization: 'Bearer ' + token } })
         }
     }).catch(e => console.error('Failed to sync profile', e));
 
-loadUsers().then(() => {
+// ── Load socket IMMEDIATELY on page load (not after users load) ──
+(function initSocketEarly() {
     var s = document.createElement('script');
     s.src = API + '/socket.io/socket.io.js';
-    s.onload = function() {
-        const socket = io(API, { transports: ['websocket', 'polling'] });
-        window._homeSocket = socket;
-        
-        socket.on('connect', () => {
-            socket.emit('register_user', token);
-        });
-        socket.on('user_status', (data) => {
+    s.onerror = function() {
+        // Fallback to CDN
+        var fb = document.createElement('script');
+        fb.src = 'https://cdn.socket.io/4.8.1/socket.io.min.js';
+        fb.onload = setupSocket;
+        document.head.appendChild(fb);
+    };
+    s.onload = setupSocket;
+    document.head.appendChild(s);
+})();
+
+function setupSocket() {
+    const socket = io(API, {
+        transports: ['websocket', 'polling'],
+        reconnectionDelay: 500,
+        reconnectionAttempts: Infinity,
+        timeout: 10000
+    });
+    window._homeSocket = socket;
+
+    socket.on('connect', () => {
+        socket.emit('register_user', token);
+    });
+    socket.on('user_status', (data) => {
             const user = allUsers.find(u => u.uid === data.uid);
             if (user) {
                 user.is_online = data.is_online;
@@ -929,9 +971,9 @@ loadUsers().then(() => {
             sessionStorage.setItem('callPartner', JSON.stringify({ uid: data.from_uid, first_name: data.caller.first_name, last_name: data.caller.last_name, is_verified: data.caller.is_verified, profile_photo: data.caller.profile_photo }));
             window.location.href = 'index.html';
         };
-    };
-    document.body.appendChild(s);
-});
+};
+
+loadUsers();
 </script>
 </body>
 </html>

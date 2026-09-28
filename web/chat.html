@@ -1184,10 +1184,11 @@
                 caller: { first_name: currentMe.first_name, last_name: currentMe.last_name, uid: currentMe.uid, profile_photo: currentMe.profile_photo }
             }));
 
-            // Signal the callee — wait for emit ack before navigating
-            const doNavigate = () => {
-                window.location.href = 'index.html';
-            };
+        // Signal the callee — navigate only after server confirms delivery
+            const doNavigate = (() => {
+                let navigated = false;
+                return () => { if (!navigated) { navigated = true; window.location.href = 'index.html'; } };
+            })();
 
             if (socket && socket.connected) {
                 socket.emit('incoming_call', {
@@ -1195,9 +1196,16 @@
                     caller: { first_name: currentMe.first_name, last_name: currentMe.last_name, uid: currentMe.uid, profile_photo: currentMe.profile_photo },
                     callId: data.callId,
                     isVideo: isVideo
-                }, () => doNavigate()); // use ack callback to navigate only after server confirms
-                // Fallback timeout in case ack never fires
-                setTimeout(doNavigate, 600);
+                }, (ack) => {
+                    if (ack && ack.ok) {
+                        doNavigate();
+                    } else {
+                        // Receiver offline — navigate anyway, caller screen shows ringing
+                        setTimeout(doNavigate, 800);
+                    }
+                });
+                // Hard fallback — navigate after 2s regardless
+                setTimeout(doNavigate, 2000);
             } else {
                 doNavigate();
             }
