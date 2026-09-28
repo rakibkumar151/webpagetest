@@ -1041,18 +1041,45 @@ socket.on('call_busy', async () => {
     if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
     stopTimer();
     
-    alert("They are currently talking to someone else. Please try calling again later.");
-    
-    // Go back to chat with this partner
-    try {
-        const partner = JSON.parse(sessionStorage.getItem('callPartner') || 'null');
-        if (partner && partner.uid) {
-            sessionStorage.setItem('chatPartner', JSON.stringify(partner));
-            window.location.replace('chat.html');
-            return;
+    // Show busy animation instead of alert
+    const callingName = document.getElementById('callingName');
+    const callingType = document.getElementById('callingType');
+    if (callingName && callingType) {
+        callingName.textContent = 'User is Busy';
+        callingName.style.color = '#ef4444'; // red
+        callingType.innerHTML = `<span style="color: #f87171; font-weight: 500; animation: flashBusy 1s infinite;">They are currently talking to someone else.<br>Please try calling again later.</span>`;
+        
+        if (!document.getElementById('busyAnim')) {
+            const style = document.createElement('style');
+            style.id = 'busyAnim';
+            style.innerHTML = `@keyframes flashBusy { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`;
+            document.head.appendChild(style);
         }
-    } catch(e) {}
-    window.location.replace('home.html');
+        
+        // Wait 3 seconds then redirect
+        setTimeout(() => {
+            try {
+                const partner = JSON.parse(sessionStorage.getItem('callPartner') || 'null');
+                if (partner && partner.uid) {
+                    sessionStorage.setItem('chatPartner', JSON.stringify(partner));
+                    window.location.replace('chat.html');
+                    return;
+                }
+            } catch(e) {}
+            window.location.replace('home.html');
+        }, 3000);
+    } else {
+        alert("They are currently talking to someone else. Please try calling again later.");
+        try {
+            const partner = JSON.parse(sessionStorage.getItem('callPartner') || 'null');
+            if (partner && partner.uid) {
+                sessionStorage.setItem('chatPartner', JSON.stringify(partner));
+                window.location.replace('chat.html');
+                return;
+            }
+        } catch(e) {}
+        window.location.replace('home.html');
+    }
 });
 
 socket.on('disconnect', (reason) => {
