@@ -213,19 +213,19 @@ function changeAppState(newState, uiMsg) {
         startTimer();
         startStatsMonitor();
         qualityIndicator.classList.remove('hidden');
-        document.querySelector('.controls').style.display = 'flex';
+        document.querySelector('.video-controls').style.display = 'flex';
     } else if (newState === 'CONNECTING') {
         showCallingOverlay();
-        document.querySelector('.controls').style.display = 'flex';
+        document.querySelector('.video-controls').style.display = 'flex';
     } else if (newState === 'INCOMING') {
-        document.querySelector('.controls').style.display = 'none';
+        document.querySelector('.video-controls').style.display = 'none';
     } else if (['ENDED', 'FAILED', 'IDLE'].includes(newState)) {
         hideCallingOverlay();
         stopTimer();
         clearInterval(statsInterval);
         statsInterval = null;
         qualityIndicator.classList.add('hidden');
-        document.querySelector('.controls').style.display = 'flex';
+        document.querySelector('.video-controls').style.display = 'flex';
     }
 }
 
