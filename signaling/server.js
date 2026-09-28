@@ -790,6 +790,17 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('call_ringing', (data) => {
+        // data: { to_uid }
+        if (!socket.data.uid) return;
+        if (globalUserSockets.has(data.to_uid)) {
+            const socketIds = globalUserSockets.get(data.to_uid);
+            for (let sId of socketIds) {
+                io.to(sId).emit('call_ringing', { by_uid: socket.data.uid });
+            }
+        }
+    });
+
     socket.on('call_accepted', (data) => {
         // data: { to_uid, callId }
         if (!socket.data.uid) return;

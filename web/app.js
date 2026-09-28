@@ -978,6 +978,14 @@ socket.on('call_missed', async () => {
     window.location.replace('home.html');
 });
 
+socket.on('call_ringing', () => {
+    log('[CALL] Ringing on receiver side');
+    const callingType = document.getElementById('callingType');
+    if (callingType) {
+        callingType.textContent = 'Ringing...';
+    }
+});
+
 
 socket.on('disconnect', (reason) => {
     log('Signaling disconnected:', reason);

@@ -1180,7 +1180,7 @@
                                 </div>
                                 <div>
                                     <div style="font-weight: 700; font-size: 15px;">${title}</div>
-                                    <div style="font-size: 13px; color: var(--accent1); font-weight: 600; margin-top:2px;">Ringing...</div>
+                                    <div id="inlineCallStatus" style="font-size: 13px; color: var(--accent1); font-weight: 600; margin-top:2px;">${isCaller ? 'Connecting...' : 'Ringing...'}</div>
                                 </div>
                             </div>
                             <div style="display: flex; gap: 8px;">
@@ -1286,6 +1286,10 @@
         document.getElementById('incomingCallName').innerHTML = `<div style="display:flex;align-items:center;justify-content:center;">${esc(data.caller.first_name || '') + ' ' + esc(data.caller.last_name || '')}${badgeHtml}</div>`;
         document.getElementById('incomingCallType').textContent = data.isVideo ? '📹 Incoming Video Call' : '📞 Incoming Voice Call';
         document.getElementById('callOverlay').classList.add('active');
+        
+        if (socket && socket.connected) {
+            socket.emit('call_ringing', { to_uid: data.from_uid });
+        }
         
         // Progress bar countdown 30s
         const fill = document.getElementById('callTimerFill');
@@ -1642,6 +1646,13 @@
             // ── call_missed: callee's overlay auto-dismiss when caller timed out ──
             socket.on('call_missed', () => {
                 dismissIncomingCall(true);
+            });
+            
+            socket.on('call_ringing', (data) => {
+                if (outgoingCallData) {
+                    const statusEl = document.getElementById('inlineCallStatus');
+                    if (statusEl) statusEl.textContent = 'Ringing...';
+                }
             });
 
             // ── Real-time profile photo update ──
