@@ -150,6 +150,7 @@
         }
 
         .msg-bubble-wrapper {
+            position: relative;
             display: flex;
             flex-direction: column;
             max-width: 100%;
@@ -315,12 +316,12 @@
         }
         .reaction-btn:hover { transform: scale(1.4) translateY(-3px); }
         .msg-reactions {
-            position: absolute; bottom: -12px; right: 0;
-            background: var(--nav); border: 1px solid var(--border); border-radius: 12px;
-            padding: 2px 6px; font-size: 12px; display: flex; gap: 2px; box-shadow: 0 2px 5px rgba(0,0,0,0.5);
-            z-index: 5;
+            position: absolute; bottom: -8px; right: -8px;
+            background: var(--nav); border: 2px solid var(--bg); border-radius: 14px;
+            padding: 2px 4px; font-size: 13px; display: flex; gap: 3px; box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+            z-index: 5; align-items: center; justify-content: center; width: max-content; line-height: 1;
         }
-        .msg-row.recv .msg-reactions { right: auto; left: 0; }
+        .msg-row.recv .msg-reactions { right: -8px; left: auto; }
         .msg-reactions.hidden { display: none; }
 
         /* Reply Preview in Input */
@@ -938,7 +939,7 @@
             pressTimer = setTimeout(() => {
                 isLongPress = true;
                 wrapper.querySelector('.reactions-bar').classList.add('active');
-            }, 800);
+            }, 3000);
         });
         wrapper.addEventListener('mouseup', (e) => {
             clearTimeout(pressTimer);
@@ -955,7 +956,7 @@
                 e.preventDefault();
                 wrapper.querySelector('.reactions-bar').classList.add('active');
                 if(window.navigator.vibrate) window.navigator.vibrate(50);
-            }, 800);
+            }, 3000);
         });
         wrapper.addEventListener('touchmove', (e) => {
             clearTimeout(pressTimer);
