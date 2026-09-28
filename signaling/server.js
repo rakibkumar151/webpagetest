@@ -787,6 +787,7 @@ io.on('connection', (socket) => {
             for (let sId of socketIds) {
                 io.to(sId).emit('call_rejected', { by_uid: socket.data.uid });
             }
+        }
     });
 
     socket.on('call_busy', (data) => {
