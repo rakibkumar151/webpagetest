@@ -657,36 +657,8 @@ async function startCall(user) {
             isCaller: true
         }));
         sessionStorage.setItem('callPartner', JSON.stringify(user));
-        sessionStorage.setItem('callerInfo', JSON.stringify({
-            to_uid: user.uid,
-            callId: data.callId,
-            isVideo: false,
-            caller: { first_name: me.first_name, last_name: me.last_name, uid: me.uid, profile_photo: me.profile_photo }
-        }));
-
-        // Emit with ack — only navigate if server confirms signal was delivered
-        let navigated = false;
-        const navigateToCall = () => {
-            if (!navigated) { navigated = true; window.location.href = 'index.html'; }
-        };
-
-        socket.emit('incoming_call', {
-            to_uid: user.uid,
-            caller: me,
-            callId: data.callId,
-            isVideo: false
-        }, (ack) => {
-            if (ack && ack.ok) {
-                navigateToCall();
-            } else {
-                // Receiver socket not connected — still navigate, caller screen will handle timeout
-                showToast('User may be offline — calling anyway...', 2500);
-                setTimeout(navigateToCall, 800);
-            }
-        });
-
-        // Hard fallback: navigate after 2s regardless
-        setTimeout(navigateToCall, 2000);
+        
+        window.location.href = 'index.html';
     } catch(e) {
         showToast('Connection error. Check your internet.');
     }
