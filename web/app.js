@@ -1129,12 +1129,89 @@ socket.on('peer_action', (data) => {
 // ─── AUTO-REJOIN ON RELOAD ────────────────────────────────────────────────────
 window.addEventListener('load', async () => {
     const savedCall = sessionStorage.getItem('activeCall');
+    const incomingCallStr = sessionStorage.getItem('incomingCallToAnswer');
+
+    if (incomingCallStr) {
+        // We arrived here as a CALLEE because chat.html/home.html redirected us
+        try {
+            const data = JSON.parse(incomingCallStr);
+            sessionStorage.removeItem('incomingCallToAnswer'); // prevent loop on reload
+            
+            // Wait for socket to connect then emit call_ringing so caller knows we are on this screen
+            if (socket.connected) socket.emit('call_ringing', { to_uid: data.from_uid });
+            else socket.once('connect', () => socket.emit('call_ringing', { to_uid: data.from_uid }));
+            
+            switchScreen('call');
+            changeAppState('INCOMING', 'Incoming Call');
+            
+            const overlay = document.getElementById('incomingCallOverlay');
+            if (overlay) {
+                overlay.style.display = 'flex';
+                const p = data.caller;
+                if (p.profile_photo) {
+                    document.getElementById('incomingAvatar').innerHTML = `<img src="${p.profile_photo}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+                    document.getElementById('incomingAvatar').style.background = 'transparent';
+                } else {
+                    const initials = ((p.first_name||'')[0]||'') + ((p.last_name||'')[0]||'');
+                    document.getElementById('incomingAvatar').textContent = initials.toUpperCase();
+                    document.getElementById('incomingAvatar').style.background = 'linear-gradient(135deg,#7c6cff,#a855f7)';
+                }
+                const safeName = ((p.first_name||'') + ' ' + (p.last_name||'')).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                document.getElementById('incomingName').innerHTML = safeName;
+                document.getElementById('incomingType').textContent = data.isVideo ? '📹 Incoming Video Call' : '📞 Incoming Voice Call';
+                
+                // Progress bar countdown 30s
+                const fill = document.getElementById('incomingTimerBar');
+                if(fill) {
+                    fill.style.transition = 'none';
+                    fill.style.width = '100%';
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            fill.style.transition = 'width 30s linear';
+                            fill.style.width = '0%';
+                        });
+                    });
+                }
+                
+                // Set up watchdog to dismiss if missed
+                window._incomingWatchdog = setTimeout(() => {
+                    overlay.style.display = 'none';
+                    window.location.replace('chat.html');
+                }, 30000);
+            }
+            
+            document.getElementById('incomingDeclineBtn').onclick = () => {
+                clearTimeout(window._incomingWatchdog);
+                if (socket.connected) socket.emit('call_reject', { to_uid: data.from_uid });
+                document.getElementById('incomingCallOverlay').style.display = 'none';
+                sessionStorage.setItem('chatPartner', JSON.stringify({ ...data.caller, uid: data.from_uid }));
+                window.location.replace('chat.html');
+            };
+            
+            document.getElementById('incomingAcceptBtn').onclick = () => {
+                clearTimeout(window._incomingWatchdog);
+                if (socket.connected) socket.emit('call_accepted', { to_uid: data.from_uid, callId: data.callId });
+                document.getElementById('incomingCallOverlay').style.display = 'none';
+                
+                // Accept means we become an activeCall participant!
+                sessionStorage.setItem('activeCall', JSON.stringify({
+                    callId: data.callId,
+                    sessionId: crypto.randomUUID(),
+                    secondsConnected: 0,
+                    isMuted: false,
+                    isVideoMuted: !data.isVideo,
+                    isRemoteScreenSharing: false,
+                    isCaller: false
+                }));
+                sessionStorage.setItem('callPartner', JSON.stringify({ ...data.caller, uid: data.from_uid }));
+                // Reload this page to let the standard logic take over
+                window.location.reload();
+            };
+            return;
+        } catch(e) {}
+    }
 
     if (!savedCall) {
-        // No active call session — back to home page
-        window.location.replace('home.html');
-        return;
-    }
 
     // ── Restore existing session ─────────────────────────────────
     try {
@@ -1159,6 +1236,25 @@ window.addEventListener('load', async () => {
         const isNewOutgoing = (data.isCaller === true && data.secondsConnected === 0);
         const initialState = isNewOutgoing ? 'CONNECTING' : 'CONNECTED';
         changeAppState(initialState, isNewOutgoing ? 'Calling...' : 'Connected');
+        
+        if (isNewOutgoing) {
+            const emitIncomingCall = () => {
+                try {
+                    const currentMe = JSON.parse(localStorage.getItem('chet_user') || '{}');
+                    const partner = JSON.parse(sessionStorage.getItem('callPartner') || '{}');
+                    if (partner.uid) {
+                        socket.emit('incoming_call', {
+                            to_uid: partner.uid,
+                            caller: { first_name: currentMe.first_name, last_name: currentMe.last_name, uid: currentMe.uid, profile_photo: currentMe.profile_photo, is_verified: currentMe.is_verified },
+                            callId: data.callId,
+                            isVideo: !data.isVideoMuted
+                        });
+                    }
+                } catch(e) {}
+            };
+            if (socket.connected) emitIncomingCall();
+            else socket.once('connect', emitIncomingCall);
+        }
         
         hangupBtn.disabled = false;
         joinBtn.disabled   = true;

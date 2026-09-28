@@ -907,70 +907,11 @@ function setupSocket() {
         });
 
         // ── Incoming Call on Home Page ──
-        let homeIncomingCall = null;
-        let homeCallTimer = null;
-
+        // ── Incoming Call on Home Page ──
         socket.on('incoming_call', (data) => {
-            homeIncomingCall = data;
-            
-            if (data.caller.profile_photo) {
-                document.getElementById('incomingCallAvatar').innerHTML = `<img src="${data.caller.profile_photo}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
-                document.getElementById('incomingCallAvatar').style.background = 'transparent';
-            } else {
-                const initials = ((data.caller.first_name||'')[0]||'') + ((data.caller.last_name||'')[0]||'');
-                document.getElementById('incomingCallAvatar').innerHTML = initials.toUpperCase();
-                document.getElementById('incomingCallAvatar').style.background = getColor(data.caller.uid);
-            }
-            
-            const callerBadge = data.caller.is_verified ? getBadgeHtml() : '';
-            document.getElementById('incomingCallName').innerHTML = `<div style="display:flex;align-items:center;justify-content:center;">${esc(data.caller.first_name||'') + ' ' + esc(data.caller.last_name||'')}${callerBadge}</div>`;
-            document.getElementById('incomingCallType').textContent = data.isVideo ? '📹 Incoming Video Call' : '📞 Incoming Voice Call';
-            document.getElementById('callOverlay').classList.add('active');
-            const fill = document.getElementById('callTimerFill');
-            fill.style.transition = 'none';
-            fill.style.width = '100%';
-            requestAnimationFrame(() => requestAnimationFrame(() => {
-                fill.style.transition = 'width 20s linear';
-                fill.style.width = '0%';
-            }));
-            homeCallTimer = setTimeout(() => {
-                document.getElementById('callOverlay').classList.remove('active');
-                homeIncomingCall = null;
-            }, 20000);
-        });
-
-        socket.on('call_missed', () => {
-            clearTimeout(homeCallTimer);
-            document.getElementById('callOverlay').classList.remove('active');
-            homeIncomingCall = null;
-        });
-
-        window.homeRejectCall = function() {
-            if (!homeIncomingCall) return;
-            clearTimeout(homeCallTimer);
-            socket.emit('call_reject', { to_uid: homeIncomingCall.from_uid });
-            document.getElementById('callOverlay').classList.remove('active');
-            homeIncomingCall = null;
-        };
-
-        window.homeAcceptCall = function() {
-            if (!homeIncomingCall) return;
-            clearTimeout(homeCallTimer);
-            const data = homeIncomingCall;
-            homeIncomingCall = null;
-            document.getElementById('callOverlay').classList.remove('active');
-            sessionStorage.setItem('activeCall', JSON.stringify({
-                callId: data.callId,
-                sessionId: crypto.randomUUID(),
-                secondsConnected: 0,
-                isMuted: false,
-                isVideoMuted: !data.isVideo,
-                isRemoteScreenSharing: false,
-                isCaller: false
-            }));
-            sessionStorage.setItem('callPartner', JSON.stringify({ uid: data.from_uid, first_name: data.caller.first_name, last_name: data.caller.last_name, is_verified: data.caller.is_verified, profile_photo: data.caller.profile_photo }));
+            sessionStorage.setItem('incomingCallToAnswer', JSON.stringify(data));
             window.location.href = 'index.html';
-        };
+        });
 };
 
 loadUsers();
