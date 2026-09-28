@@ -547,9 +547,11 @@ app.get('/api/messages/:uid', authMiddleware, async (req, res) => {
     const myUid = req.user.uid;
     try {
         const result = await db.execute({
-            sql: `SELECT * FROM messages 
-                  WHERE (from_uid = ? AND to_uid = ?) OR (from_uid = ? AND to_uid = ?)
-                  ORDER BY created_at ASC LIMIT 100`,
+            sql: `SELECT * FROM (
+                    SELECT * FROM messages 
+                    WHERE (from_uid = ? AND to_uid = ?) OR (from_uid = ? AND to_uid = ?)
+                    ORDER BY created_at DESC LIMIT 100
+                  ) ORDER BY created_at ASC`,
             args: [myUid, otherUid, otherUid, myUid]
         });
         
