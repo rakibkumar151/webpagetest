@@ -1,0 +1,26 @@
+version: "3.8"
+
+services:
+  coturn:
+    image: coturn/coturn:latest
+    container_name: coturn
+    network_mode: "host"   # Required for UDP relay ports to work correctly
+    restart: unless-stopped
+    environment:
+      - TURN_SECRET=${TURN_SECRET}
+    volumes:
+      - ./infrastructure/coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+      - ./infrastructure/coturn/ssl/cert.pem:/etc/ssl/cert.pem:ro
+      - ./infrastructure/coturn/ssl/privkey.pem:/etc/ssl/privkey.pem:ro
+    command: ["-c", "/etc/coturn/turnserver.conf"]
+
+  signaling:
+    build: ./signaling
+    container_name: signaling
+    ports:
+      - "3000:3000"
+    environment:
+      - TURN_SECRET=${TURN_SECRET}
+      - TURN_HOST=${TURN_HOST}
+      - PORT=3000
+    restart: unless-stopped
