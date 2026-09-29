@@ -8,58 +8,17 @@ const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
 const { createClient } = require('@libsql/client');
 const nodemailer = require('nodemailer');
-const net = require('net');
 
-// ─── PROXY CONFIG ─────────────────────────────────────────────────────────────
-const PROXY_HOST = 'change4.owlproxy.com';
-const PROXY_PORT = 7778;
-const PROXY_USER = 'izUU8KQkEm50_custom_zone_IN_st__city_sid_26821469_time_5';
-const PROXY_PASS = '5559057';
-const SMTP_HOST  = 'smtp.gmail.com';
-const SMTP_PORT  = 587;
-
-function createProxySocket() {
-    return new Promise((resolve, reject) => {
-        const socket = net.connect(PROXY_PORT, PROXY_HOST, () => {
-            const auth = Buffer.from(`${PROXY_USER}:${PROXY_PASS}`).toString('base64');
-            socket.write(
-                `CONNECT ${SMTP_HOST}:${SMTP_PORT} HTTP/1.1\r\n` +
-                `Host: ${SMTP_HOST}:${SMTP_PORT}\r\n` +
-                `Proxy-Authorization: Basic ${auth}\r\n` +
-                `\r\n`
-            );
-        });
-        socket.once('data', (data) => {
-            const response = data.toString();
-            if (response.includes('200')) {
-                resolve(socket);
-            } else {
-                socket.destroy();
-                reject(new Error(`Proxy CONNECT failed: ${response.split('\r\n')[0]}`));
-            }
-        });
-        socket.on('error', reject);
-        socket.setTimeout(10000, () => {
-            socket.destroy();
-            reject(new Error('Proxy socket timeout'));
-        });
-    });
-}
-
-async function getTransporter() {
-    const socket = await createProxySocket();
-    return nodemailer.createTransport({
-        host: SMTP_HOST,
-        port: SMTP_PORT,
-        secure: false,
-        auth: {
-            user: 'rakibkumar151@gmail.com',
-            pass: 'ziasmvxfmtaxrxbx'
-        },
-        tls: { rejectUnauthorized: false },
-        connection: socket
-    });
-}
+const transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
+    auth: {
+        user: 'rakibkumar151@gmail.com',
+        pass: 'ziasmvxfmtaxrxbx'
+    },
+    tls: { rejectUnauthorized: false }
+});
 
 
 const otpStore = new Map(); // email -> { otp, data, expiresAt }
@@ -347,15 +306,17 @@ app.post('/api/auth/register', async (req, res) => {
             expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes
         });
 
-        getTransporter().then(t => {
-            t.sendMail({
-                from: 'Chet <rakibkumar151@gmail.com>',
-                to: email.toLowerCase().trim(),
-                subject: 'Your Chet Verification Code',
-                text: `Your verification code is: ${otp}\n\nThis code expires in 10 minutes.`,
-                html: `<h3>Welcome to Chet!</h3><p>Your verification code is: <b style="font-size:24px; color:#7c6cff">${otp}</b></p><p>This code expires in 10 minutes.</p>`
-            }).catch(err => console.error('[AUTH] Email send failed:', err.message));
-        }).catch(err => console.error('[AUTH] Proxy connect failed:', err.message));
+        // Log OTP to server console as fallback (check Render logs if email fails)
+        console.log(`[OTP] email=${email.toLowerCase().trim()} otp=${otp}`);
+
+        transporter.sendMail({
+            from: 'Chet <rakibkumar151@gmail.com>',
+            to: email.toLowerCase().trim(),
+            subject: 'Your Chet Verification Code',
+            text: `Your verification code is: ${otp}\n\nThis code expires in 10 minutes.`,
+            html: `<h3>Welcome to Chet!</h3><p>Your verification code is: <b style="font-size:24px; color:#7c6cff">${otp}</b></p><p>This code expires in 10 minutes.</p>`
+        }).then(info => console.log('[AUTH] Email sent OK:', info.response))
+          .catch(err => console.error('[AUTH] Email send FAILED:', err.message));
 
         res.json({ success: true, requireOtp: true, message: 'OTP sent to your email.' });
     } catch (e) {
