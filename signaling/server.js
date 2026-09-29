@@ -10,10 +10,15 @@ const { createClient } = require('@libsql/client');
 const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // use STARTTLS
     auth: {
         user: 'rakibkumar151@gmail.com',
         pass: 'ziasmvxfmtaxrxbx'
+    },
+    tls: {
+        rejectUnauthorized: false
     }
 });
 
