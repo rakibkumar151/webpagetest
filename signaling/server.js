@@ -232,6 +232,18 @@ if (TURSO_URL && TURSO_TOKEN) {
                     added_at   TEXT DEFAULT (datetime('now'))
                 )
             `);
+
+            await db.execute(`
+                CREATE TABLE IF NOT EXISTS email_domain_rules (
+                    domain     TEXT PRIMARY KEY,
+                    rule_type  TEXT NOT NULL DEFAULT 'allow', -- 'allow' or 'block'
+                    added_at   TEXT DEFAULT (datetime('now'))
+                )
+            `);
+            // Seed 'gmail.com' as an allowed domain by default so paneer can see it and edit later
+            try {
+                await db.execute(`INSERT OR IGNORE INTO email_domain_rules (domain, rule_type) VALUES ('gmail.com', 'allow')`);
+            } catch (e) {}
             
             dbReady = true;
             console.log('[DB] Turso connected and tables ready');
@@ -379,6 +391,29 @@ app.post('/api/auth/register', async (req, res) => {
         return res.status(400).json({ error: 'Username: 3-20 chars, letters/numbers/underscore only' });
     }
     try {
+        const domainMatch = email.match(/@(.+)$/);
+        if (domainMatch) {
+            const domain = domainMatch[1].toLowerCase().trim();
+            
+            // Check if there are ANY allow rules
+            const hasAllowRulesRes = await db.execute(`SELECT 1 FROM email_domain_rules WHERE rule_type = 'allow' LIMIT 1`);
+            const hasAllowRules = hasAllowRulesRes.rows.length > 0;
+            
+            if (hasAllowRules) {
+                // If there are allow rules, the domain MUST be in the allow list
+                const isAllowedRes = await db.execute(`SELECT 1 FROM email_domain_rules WHERE domain = ? AND rule_type = 'allow'`, [domain]);
+                if (isAllowedRes.rows.length === 0) {
+                    return res.status(403).json({ error: `Only specific domains are allowed. Email domain @${domain} is not permitted.` });
+                }
+            }
+            
+            // Check if the domain is explicitly blocked
+            const isBlockedRes = await db.execute(`SELECT 1 FROM email_domain_rules WHERE domain = ? AND rule_type = 'block'`, [domain]);
+            if (isBlockedRes.rows.length > 0) {
+                return res.status(403).json({ error: `Email domain @${domain} is blocked.` });
+            }
+        }
+
         const existing = await db.execute({
             sql: `SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1`,
             args: [username.toLowerCase(), email.toLowerCase().trim()]
@@ -442,6 +477,23 @@ app.post('/api/auth/verify-otp', async (req, res) => {
             console.error('[AUTH] OTP verify error:', e.message);
             res.status(500).json({ error: 'Verification failed: ' + e.message });
         }
+    }
+});
+// ─── AUTH: FETCH DOMAIN RULES ──────────────────────────────────────────────────
+app.get('/api/auth/domain-rules', async (req, res) => {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    try {
+        const rules = await db.execute(`SELECT domain, rule_type FROM email_domain_rules`);
+        const allowedDomains = rules.rows.filter(r => r.rule_type === 'allow').map(r => r.domain);
+        const blockedDomains = rules.rows.filter(r => r.rule_type === 'block').map(r => r.domain);
+        res.json({
+            hasAllowRules: allowedDomains.length > 0,
+            allowedDomains,
+            blockedDomains
+        });
+    } catch (e) {
+        console.error('[AUTH] Error fetching domain rules:', e.message);
+        res.status(500).json({ error: 'Internal error' });
     }
 });
 

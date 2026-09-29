@@ -291,7 +291,13 @@
             <input type="text" id="regUsername" placeholder="e.g. john_doe (3–20 chars)" required pattern="[a-zA-Z0-9_]{3,20}" autocomplete="off">
         </div>
         <div class="field">
-            <label>Email</label>
+            <label style="display: flex; justify-content: space-between; align-items: center;">
+                <span>Email</span>
+                <span id="domainBadge" style="display: none; background: #fff; border-radius: 6px; padding: 4px 6px; line-height: 1; align-items: center; gap: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/archive/c/c1/20211029193237%21Google_%22G%22_logo.svg" style="width:14px; height:14px;" id="domainIcon">
+                    <span id="domainText" style="color: #333; font-size: 11px; font-weight: 800; text-transform: uppercase;"></span>
+                </span>
+            </label>
             <input type="email" id="regEmail" placeholder="your@email.com" required autocomplete="off">
         </div>
         <div class="field">
@@ -315,6 +321,26 @@
 
 <script>
 const API = (window.APP_CONFIG && window.APP_CONFIG.SIGNALING_URL) || window.location.origin;
+
+// Fetch domain rules on load to display in UI
+fetch(`${API}/api/auth/domain-rules`)
+    .then(r => r.json())
+    .then(data => {
+        if (data.hasAllowRules && data.allowedDomains.length > 0) {
+            const badge = document.getElementById('domainBadge');
+            const text = document.getElementById('domainText');
+            if (badge && text) {
+                badge.style.display = 'flex';
+                const primaryDomain = data.allowedDomains[0];
+                text.textContent = primaryDomain.toUpperCase();
+                if (!primaryDomain.includes('gmail')) {
+                    const icon = document.getElementById('domainIcon');
+                    if(icon) icon.style.display = 'none'; // hide G logo if not gmail
+                }
+            }
+        }
+    })
+    .catch(e => console.warn('Failed to fetch domain rules', e));
 
 function switchTab(tab) {
     document.getElementById('loginForm').classList.toggle('active', tab === 'login');
