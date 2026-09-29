@@ -1062,4 +1062,17 @@ app.use(express.static(path.join(__dirname, '..', 'web'), {
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`[SERVER] Listening on 0.0.0.0:${PORT}`);
     console.log(`[SERVER] TURN_HOST=${TURN_HOST || 'NOT SET'} DB=${TURSO_URL ? 'Turso' : 'NONE'} NODE_ENV=${process.env.NODE_ENV || 'development'}`);
+
+    // ─── KEEP-ALIVE: self-ping every 13 mins to prevent Render free tier sleep ──
+    const serverUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+    setInterval(() => {
+        const https = require('https');
+        const http  = require('http');
+        const mod   = serverUrl.startsWith('https') ? https : http;
+        mod.get(`${serverUrl}/api/health`, (res) => {
+            console.log(`[KEEP-ALIVE] ping OK status=${res.statusCode}`);
+        }).on('error', (e) => {
+            console.warn('[KEEP-ALIVE] ping failed:', e.message);
+        });
+    }, 13 * 60 * 1000); // every 13 minutes
 });
