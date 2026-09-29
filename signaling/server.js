@@ -7,123 +7,8 @@ const rateLimit = require('express-rate-limit');
 const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
 const { createClient } = require('@libsql/client');
-const nodemailer = require('nodemailer');
-const net = require('net');
-
-// ─── SMTP PROXY: Residential proxy tunnel to bypass Render SMTP block ─────────
-const PROXY_HOST = 'change4.owlproxy.com';
-const PROXY_PORT = 7778;
-const PROXY_USER = 'izUU8KQkEm50_custom_zone_IN_st__city_sid_26821469_time_5';
-const PROXY_PASS = '5559057';
-const SMTP_HOST  = 'smtp.gmail.com';
-const SMTP_PORT  = 587;
-
-function createProxyTunnel() {
-    return new Promise((resolve, reject) => {
-        const socket = net.connect(PROXY_PORT, PROXY_HOST, () => {
-            const auth = Buffer.from(`${PROXY_USER}:${PROXY_PASS}`).toString('base64');
-            socket.write(
-                `CONNECT ${SMTP_HOST}:${SMTP_PORT} HTTP/1.1\r\n` +
-                `Host: ${SMTP_HOST}:${SMTP_PORT}\r\n` +
-                `Proxy-Authorization: Basic ${auth}\r\n` +
-                `Connection: keep-alive\r\n\r\n`
-            );
-        });
-        let buffer = '';
-        socket.on('data', (chunk) => {
-            buffer += chunk.toString();
-            if (buffer.includes('\r\n\r\n')) {
-                if (buffer.includes('200')) {
-                    socket.removeAllListeners('data');
-                    resolve(socket);
-                } else {
-                    socket.destroy();
-                    reject(new Error('Proxy failed: ' + buffer.split('\r\n')[0]));
-                }
-            }
-        });
-        socket.on('error', reject);
-        socket.setTimeout(15000, () => { socket.destroy(); reject(new Error('Proxy timeout')); });
-    });
-}
-
-// Creates a local TCP server that pipes connections through the proxy tunnel
-// nodemailer → localhost:port → proxy tunnel → smtp.gmail.com:587
-function createLocalSmtpProxy() {
-    return new Promise((resolve, reject) => {
-        const server = net.createServer(async (clientSocket) => {
-            try {
-                const proxySocket = await createProxyTunnel();
-                clientSocket.pipe(proxySocket);
-                proxySocket.pipe(clientSocket);
-                clientSocket.on('error', () => proxySocket.destroy());
-                proxySocket.on('error', () => clientSocket.destroy());
-                clientSocket.on('close', () => proxySocket.destroy());
-                proxySocket.on('close', () => clientSocket.destroy());
-            } catch (e) {
-                console.error('[SMTP-PROXY] Tunnel failed:', e.message);
-                clientSocket.destroy();
-            }
-        });
-        server.listen(0, '127.0.0.1', () => {
-            resolve({ server, port: server.address().port });
-        });
-        server.on('error', reject);
-    });
-}
-
-async function sendOtpEmail(toEmail, otp, context = 'register') {
-    const isReset = context === 'reset';
-    const subject = isReset ? 'Reset Your Chet Password' : 'Your Chet Verification Code';
-    const title = isReset ? 'Password Reset Request' : 'Welcome to Chet!';
-    const bodyText = isReset ? 'You requested a password reset.' : 'We are excited to have you on board.';
-    
-    const mailOpts = {
-        from: 'Chet <rakibkumar151@gmail.com>',
-        to: toEmail,
-        subject: subject,
-        text: `${bodyText}\n\nYour verification code is: ${otp}\n\nThis code expires in 10 minutes.`,
-        html: `<h3>${title}</h3><p>${bodyText}</p><p>Your verification code is: <b style="font-size:24px;color:#7c6cff">${otp}</b></p><p>This code expires in 10 minutes.</p>`
-    };
-
-    // Try via residential proxy tunnel (bypasses Render SMTP block)
-    try {
-        const { server, port } = await createLocalSmtpProxy();
-        const transport = nodemailer.createTransport({
-            host: '127.0.0.1',
-            port,
-            secure: false,
-            auth: { user: 'rakibkumar151@gmail.com', pass: 'ziasmvxfmtaxrxbx' },
-            tls: { rejectUnauthorized: false },
-            connectionTimeout: 20000,
-            greetingTimeout: 20000
-        });
-        const info = await transport.sendMail(mailOpts);
-        server.close();
-        return info;
-    } catch (proxyErr) {
-        console.error('[SMTP-PROXY] Proxy send failed, trying direct SMTP:', proxyErr.message);
-        // Fallback: direct Gmail SMTP (works locally)
-        const transport = nodemailer.createTransport({
-            host: SMTP_HOST, port: SMTP_PORT, secure: false,
-            auth: { user: 'rakibkumar151@gmail.com', pass: 'ziasmvxfmtaxrxbx' },
-            tls: { rejectUnauthorized: false }
-        });
-        return transport.sendMail(mailOpts);
-    }
-}
-
-
-const otpStore = new Map(); // email -> { otp, data, expiresAt }
-setInterval(() => {
-    const now = Date.now();
-    for (const [email, entry] of otpStore.entries()) {
-        if (now > entry.expiresAt) otpStore.delete(email);
-    }
-}, 60000);
 
 const app = express();
-app.set('trust proxy', 1); // Render is behind a reverse proxy
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
 const allowedOrigin = process.env.FRONTEND_ORIGIN || '*';
@@ -157,7 +42,6 @@ const apiLimiter = rateLimit({
     max: 200,
     standardHeaders: true,
     legacyHeaders: false,
-    validate: { xForwardedForHeader: false }, // disable X-Forwarded-For validation warning
     message: { error: 'Too many requests, please try again later.' }
 });
 app.use('/api/', apiLimiter);
@@ -237,18 +121,6 @@ if (TURSO_URL && TURSO_TOKEN) {
                     added_at   TEXT DEFAULT (datetime('now'))
                 )
             `);
-
-            await db.execute(`
-                CREATE TABLE IF NOT EXISTS email_domain_rules (
-                    domain     TEXT PRIMARY KEY,
-                    rule_type  TEXT NOT NULL DEFAULT 'allow', -- 'allow' or 'block'
-                    added_at   TEXT DEFAULT (datetime('now'))
-                )
-            `);
-            // Seed 'gmail.com' as an allowed domain by default so paneer can see it and edit later
-            try {
-                await db.execute(`INSERT OR IGNORE INTO email_domain_rules (domain, rule_type) VALUES ('gmail.com', 'allow')`);
-            } catch (e) {}
             
             dbReady = true;
             console.log('[DB] Turso connected and tables ready');
@@ -396,109 +268,24 @@ app.post('/api/auth/register', async (req, res) => {
         return res.status(400).json({ error: 'Username: 3-20 chars, letters/numbers/underscore only' });
     }
     try {
-        const domainMatch = email.match(/@(.+)$/);
-        if (domainMatch) {
-            const domain = domainMatch[1].toLowerCase().trim();
-            
-            // Check if there are ANY allow rules
-            const hasAllowRulesRes = await db.execute(`SELECT 1 FROM email_domain_rules WHERE rule_type = 'allow' LIMIT 1`);
-            const hasAllowRules = hasAllowRulesRes.rows.length > 0;
-            
-            if (hasAllowRules) {
-                // If there are allow rules, the domain MUST be in the allow list
-                const isAllowedRes = await db.execute(`SELECT 1 FROM email_domain_rules WHERE domain = ? AND rule_type = 'allow'`, [domain]);
-                if (isAllowedRes.rows.length === 0) {
-                    return res.status(403).json({ error: `Only specific domains are allowed. Email domain @${domain} is not permitted.` });
-                }
-            }
-            
-            // Check if the domain is explicitly blocked
-            const isBlockedRes = await db.execute(`SELECT 1 FROM email_domain_rules WHERE domain = ? AND rule_type = 'block'`, [domain]);
-            if (isBlockedRes.rows.length > 0) {
-                return res.status(403).json({ error: `Email domain @${domain} is blocked.` });
-            }
-        }
-
-        const existing = await db.execute({
-            sql: `SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1`,
-            args: [username.toLowerCase(), email.toLowerCase().trim()]
-        });
-        if (existing.rows.length > 0) {
-            return res.status(409).json({ error: 'Username or email is already taken' });
-        }
-
-        const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digit OTP
         const password_hash = await bcrypt.hash(password, 12);
-        
-        otpStore.set(email.toLowerCase().trim(), {
-            otp,
-            data: { username: username.toLowerCase(), first_name: first_name.trim(), last_name: last_name.trim(), email: email.toLowerCase().trim(), password_hash },
-            expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes
-        });
-
-        // Log OTP to server console as fallback (check Render logs if email fails)
-        console.log(`[OTP] email=${email.toLowerCase().trim()} otp=${otp}`);
-
-        sendOtpEmail(email.toLowerCase().trim(), otp)
-            .then(info => console.log('[AUTH] Email sent OK:', JSON.stringify(info)))
-            .catch(err => console.error('[AUTH] Email send FAILED:', err.message));
-
-        res.json({ success: true, requireOtp: true, message: 'OTP sent to your email.' });
-    } catch (e) {
-        console.error('[AUTH] Register error:', e.message);
-        res.status(500).json({ error: 'Failed to send OTP email: ' + e.message });
-    }
-});
-
-// ─── AUTH: VERIFY OTP ────────────────────────────────────────────────────────
-app.post('/api/auth/verify-otp', async (req, res) => {
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-    const { email, otp } = req.body;
-    if (!email || !otp) return res.status(400).json({ error: 'Email and OTP required' });
-    
-    const record = otpStore.get(email.toLowerCase().trim());
-    if (!record || record.otp !== otp || Date.now() > record.expiresAt) {
-        return res.status(400).json({ error: 'Invalid or expired OTP' });
-    }
-    
-    try {
-        const { username, first_name, last_name, password_hash } = record.data;
         const uid = 'UID' + Math.floor(1000000 + Math.random() * 9000000);
         await db.execute({
             sql: `INSERT INTO users (uid, username, first_name, last_name, email, password_hash)
                   VALUES (?, ?, ?, ?, ?, ?)`,
-            args: [uid, username, first_name, last_name, email.toLowerCase().trim(), password_hash]
+            args: [uid, username.toLowerCase(), first_name.trim(), last_name.trim(), email.toLowerCase().trim(), password_hash]
         });
-        
-        otpStore.delete(email.toLowerCase().trim()); // Clean up OTP
-        
-        const token = jwt.sign({ uid, username }, JWT_SECRET, { expiresIn: '30d' });
-        console.log(`[AUTH] Registered & Verified uid=${uid} username=${username}`);
-        res.json({ token, uid, username, first_name, last_name, is_verified: false });
+        const token = jwt.sign({ uid, username: username.toLowerCase() }, JWT_SECRET, { expiresIn: '30d' });
+        console.log(`[AUTH] Registered uid=${uid} username=${username}`);
+        res.json({ token, uid, username: username.toLowerCase(), first_name: first_name.trim(), last_name: last_name.trim(), is_verified: false });
     } catch (e) {
         if (e.message?.includes('UNIQUE') || e.message?.includes('SQLITE_CONSTRAINT')) {
             res.status(409).json({ error: 'Username or email is already taken' });
         } else {
-            console.error('[AUTH] OTP verify error:', e.message);
-            res.status(500).json({ error: 'Verification failed: ' + e.message });
+            console.error('[AUTH] Register error:', e.message);
+            // Return actual error for now to help diagnose
+            res.status(500).json({ error: 'Registration failed: ' + e.message });
         }
-    }
-});
-// ─── AUTH: FETCH DOMAIN RULES ──────────────────────────────────────────────────
-app.get('/api/auth/domain-rules', async (req, res) => {
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-    try {
-        const rules = await db.execute(`SELECT domain, rule_type FROM email_domain_rules`);
-        const allowedDomains = rules.rows.filter(r => r.rule_type === 'allow').map(r => r.domain);
-        const blockedDomains = rules.rows.filter(r => r.rule_type === 'block').map(r => r.domain);
-        res.json({
-            hasAllowRules: allowedDomains.length > 0,
-            allowedDomains,
-            blockedDomains
-        });
-    } catch (e) {
-        console.error('[AUTH] Error fetching domain rules:', e.message);
-        res.status(500).json({ error: 'Internal error' });
     }
 });
 
@@ -522,96 +309,6 @@ app.post('/api/auth/login', async (req, res) => {
     } catch (e) {
         console.error('[AUTH] Login error:', e.message);
         res.status(500).json({ error: 'Login failed. Please try again.' });
-    }
-});
-
-// ─── AUTH: FORGOT PASSWORD ───────────────────────────────────────────────────
-app.post('/api/auth/forgot-password', async (req, res) => {
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email is required' });
-
-    try {
-        const result = await db.execute({
-            sql: `SELECT id FROM users WHERE email = ? LIMIT 1`,
-            args: [email.toLowerCase().trim()]
-        });
-        if (result.rows.length === 0) {
-            // For security, do not reveal if email exists, just return success
-            return res.json({ success: true, message: 'If an account exists, an OTP will be sent.' });
-        }
-
-        // Generate OTP
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        otpStore.set(email.toLowerCase().trim(), {
-            otp,
-            type: 'reset',
-            expiresAt: Date.now() + 10 * 60 * 1000
-        });
-
-        console.log(`[OTP-RESET] email=${email.toLowerCase().trim()} otp=${otp}`);
-        
-        sendOtpEmail(email.toLowerCase().trim(), otp, 'reset')
-            .then(info => console.log('[AUTH] Reset email sent OK'))
-            .catch(err => console.error('[AUTH] Reset email send FAILED:', err.message));
-
-        res.json({ success: true, message: 'OTP sent to your email.' });
-    } catch (e) {
-        console.error('[AUTH] Forgot password error:', e.message);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-app.post('/api/auth/verify-reset-otp', async (req, res) => {
-    const { email, otp } = req.body;
-    if (!email || !otp) return res.status(400).json({ error: 'Email and OTP required' });
-
-    const emailKey = email.toLowerCase().trim();
-    const entry = otpStore.get(emailKey);
-
-    if (!entry || entry.otp !== otp || entry.type !== 'reset') {
-        return res.status(401).json({ error: 'Invalid or expired OTP' });
-    }
-    if (Date.now() > entry.expiresAt) {
-        otpStore.delete(emailKey);
-        return res.status(401).json({ error: 'OTP expired' });
-    }
-
-    // OTP valid. Remove it, and generate a short-lived reset token
-    otpStore.delete(emailKey);
-    const resetToken = jwt.sign({ email: emailKey, type: 'reset' }, JWT_SECRET, { expiresIn: '15m' });
-    
-    res.json({ success: true, resetToken });
-});
-
-app.post('/api/auth/reset-password', async (req, res) => {
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-    const { resetToken, newPassword } = req.body;
-    if (!resetToken || !newPassword) return res.status(400).json({ error: 'Token and new password required' });
-    if (newPassword.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
-
-    try {
-        const decoded = jwt.verify(resetToken, JWT_SECRET);
-        if (decoded.type !== 'reset' || !decoded.email) {
-            return res.status(401).json({ error: 'Invalid token type' });
-        }
-
-        const email = decoded.email;
-        const passwordHash = await bcrypt.hash(newPassword, 10);
-
-        await db.execute({
-            sql: `UPDATE users SET password_hash = ? WHERE email = ?`,
-            args: [passwordHash, email]
-        });
-
-        console.log(`[AUTH] Password reset for email=${email}`);
-        res.json({ success: true, message: 'Password updated successfully' });
-    } catch (e) {
-        console.error('[AUTH] Reset password error:', e.message);
-        if (e.name === 'TokenExpiredError' || e.name === 'JsonWebTokenError') {
-            return res.status(401).json({ error: 'Token expired or invalid. Please request a new OTP.' });
-        }
-        res.status(500).json({ error: 'Failed to reset password' });
     }
 });
 
@@ -1302,17 +999,4 @@ app.use(express.static(path.join(__dirname, '..', 'web'), {
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`[SERVER] Listening on 0.0.0.0:${PORT}`);
     console.log(`[SERVER] TURN_HOST=${TURN_HOST || 'NOT SET'} DB=${TURSO_URL ? 'Turso' : 'NONE'} NODE_ENV=${process.env.NODE_ENV || 'development'}`);
-
-    // ─── KEEP-ALIVE: self-ping every 13 mins to prevent Render free tier sleep ──
-    const serverUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
-    setInterval(() => {
-        const https = require('https');
-        const http  = require('http');
-        const mod   = serverUrl.startsWith('https') ? https : http;
-        mod.get(`${serverUrl}/api/health`, (res) => {
-            console.log(`[KEEP-ALIVE] ping OK status=${res.statusCode}`);
-        }).on('error', (e) => {
-            console.warn('[KEEP-ALIVE] ping failed:', e.message);
-        });
-    }, 13 * 60 * 1000); // every 13 minutes
 });
