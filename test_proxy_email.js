@@ -16,60 +16,85 @@ function createProxyTunnel() {
                 `CONNECT ${SMTP_HOST}:${SMTP_PORT} HTTP/1.1\r\n` +
                 `Host: ${SMTP_HOST}:${SMTP_PORT}\r\n` +
                 `Proxy-Authorization: Basic ${auth}\r\n` +
-                `Connection: keep-alive\r\n` +
-                `\r\n`
+                `Connection: keep-alive\r\n\r\n`
             );
         });
-
         let buffer = '';
         socket.on('data', (chunk) => {
             buffer += chunk.toString();
             if (buffer.includes('\r\n\r\n')) {
                 if (buffer.includes('200')) {
-                    console.log('[PROXY] Tunnel OK');
                     socket.removeAllListeners('data');
-                    // Patch connect so nodemailer thinks it's a fresh socket
-                    socket.connect = (port, host, cb) => { if (cb) cb(); };
                     resolve(socket);
                 } else {
                     socket.destroy();
-                    reject(new Error('Proxy CONNECT failed: ' + buffer.split('\r\n')[0]));
+                    reject(new Error('Proxy failed: ' + buffer.split('\r\n')[0]));
                 }
             }
         });
-        socket.on('error', (e) => reject(new Error('Socket error: ' + e.message)));
-        socket.setTimeout(15000, () => {
-            socket.destroy();
-            reject(new Error('Proxy timeout'));
+        socket.on('error', reject);
+        socket.setTimeout(15000, () => { socket.destroy(); reject(new Error('Proxy timeout')); });
+    });
+}
+
+// Create a local TCP server that pipes through the proxy tunnel
+// nodemailer connects to localhost:randomPort → we tunnel it to smtp.gmail.com:587 via proxy
+function createLocalProxy() {
+    return new Promise((resolve, reject) => {
+        const server = net.createServer(async (clientSocket) => {
+            try {
+                console.log('[PROXY-LOCAL] Client connected, opening proxy tunnel...');
+                const proxySocket = await createProxyTunnel();
+                console.log('[PROXY-LOCAL] Tunnel established, piping...');
+                clientSocket.pipe(proxySocket);
+                proxySocket.pipe(clientSocket);
+                clientSocket.on('error', () => proxySocket.destroy());
+                proxySocket.on('error', (e) => { console.error('[PROXY-LOCAL] Tunnel error:', e.message); clientSocket.destroy(); });
+                clientSocket.on('close', () => proxySocket.destroy());
+                proxySocket.on('close', () => clientSocket.destroy());
+            } catch (e) {
+                console.error('[PROXY-LOCAL] Tunnel setup failed:', e.message);
+                clientSocket.destroy();
+            }
         });
+
+        server.listen(0, '127.0.0.1', () => {
+            const { port } = server.address();
+            console.log(`[PROXY-LOCAL] Local SMTP proxy on port ${port}`);
+            resolve({ server, port });
+        });
+        server.on('error', reject);
     });
 }
 
 async function main() {
-    console.log('[TEST] Connecting to proxy...');
-    const socket = await createProxyTunnel();
+    console.log('[TEST] Setting up local proxy...');
+    const { server, port } = await createLocalProxy();
 
-    const transport = nodemailer.createTransport({
-        host: SMTP_HOST,
-        port: SMTP_PORT,
-        secure: false,
-        auth: {
-            user: 'rakibkumar151@gmail.com',
-            pass: 'ziasmvxfmtaxrxbx'
-        },
-        tls: { rejectUnauthorized: false },
-        socket: socket
-    });
+    try {
+        const transport = nodemailer.createTransport({
+            host: '127.0.0.1',
+            port: port,
+            secure: false,
+            auth: {
+                user: 'rakibkumar151@gmail.com',
+                pass: 'ziasmvxfmtaxrxbx'
+            },
+            tls: { rejectUnauthorized: false }
+        });
 
-    console.log('[TEST] Sending email...');
-    const info = await transport.sendMail({
-        from: 'Chet <rakibkumar151@gmail.com>',
-        to: 'kuanrhaisn@gmail.com',
-        subject: 'Proxy Test OTP',
-        text: 'Test OTP code: 999888'
-    });
+        console.log('[TEST] Sending email via proxy tunnel...');
+        const info = await transport.sendMail({
+            from: 'Chet <rakibkumar151@gmail.com>',
+            to: 'kuanrhaisn@gmail.com',
+            subject: 'Chet OTP Test via Proxy',
+            text: 'Your OTP: 123456'
+        });
 
-    console.log('[OK] Email sent! Response:', info.response);
+        console.log('[OK] Email sent!', info.response);
+    } finally {
+        server.close();
+    }
 }
 
 main().catch(e => console.error('[FAIL]', e.message));

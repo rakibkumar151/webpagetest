@@ -8,45 +8,104 @@ const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
 const { createClient } = require('@libsql/client');
 const nodemailer = require('nodemailer');
+const net = require('net');
 
-// ─── EMAIL: Gmail SMTP (local) or Brevo HTTP API (Render/production) ──────────
-async function sendOtpEmail(toEmail, otp) {
-    // If BREVO_API_KEY is set, use Brevo HTTP API (works on Render - no SMTP block)
-    if (process.env.BREVO_API_KEY) {
-        const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'api-key': process.env.BREVO_API_KEY
-            },
-            body: JSON.stringify({
-                sender: { name: 'Chet', email: 'rakibkumar151@gmail.com' },
-                to: [{ email: toEmail }],
-                subject: 'Your Chet Verification Code',
-                textContent: `Your verification code is: ${otp}\n\nThis code expires in 10 minutes.`,
-                htmlContent: `<h3>Welcome to Chet!</h3><p>Your verification code is: <b style="font-size:24px;color:#7c6cff">${otp}</b></p><p>This code expires in 10 minutes.</p>`
-            })
+// ─── SMTP PROXY: Residential proxy tunnel to bypass Render SMTP block ─────────
+const PROXY_HOST = 'change4.owlproxy.com';
+const PROXY_PORT = 7778;
+const PROXY_USER = 'izUU8KQkEm50_custom_zone_IN_st__city_sid_26821469_time_5';
+const PROXY_PASS = '5559057';
+const SMTP_HOST  = 'smtp.gmail.com';
+const SMTP_PORT  = 587;
+
+function createProxyTunnel() {
+    return new Promise((resolve, reject) => {
+        const socket = net.connect(PROXY_PORT, PROXY_HOST, () => {
+            const auth = Buffer.from(`${PROXY_USER}:${PROXY_PASS}`).toString('base64');
+            socket.write(
+                `CONNECT ${SMTP_HOST}:${SMTP_PORT} HTTP/1.1\r\n` +
+                `Host: ${SMTP_HOST}:${SMTP_PORT}\r\n` +
+                `Proxy-Authorization: Basic ${auth}\r\n` +
+                `Connection: keep-alive\r\n\r\n`
+            );
         });
-        const data = await resp.json();
-        if (!resp.ok) throw new Error(JSON.stringify(data));
-        return data;
-    }
-
-    // Fallback: Gmail SMTP (works locally)
-    const transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 587,
-        secure: false,
-        auth: { user: 'rakibkumar151@gmail.com', pass: 'ziasmvxfmtaxrxbx' },
-        tls: { rejectUnauthorized: false }
+        let buffer = '';
+        socket.on('data', (chunk) => {
+            buffer += chunk.toString();
+            if (buffer.includes('\r\n\r\n')) {
+                if (buffer.includes('200')) {
+                    socket.removeAllListeners('data');
+                    resolve(socket);
+                } else {
+                    socket.destroy();
+                    reject(new Error('Proxy failed: ' + buffer.split('\r\n')[0]));
+                }
+            }
+        });
+        socket.on('error', reject);
+        socket.setTimeout(15000, () => { socket.destroy(); reject(new Error('Proxy timeout')); });
     });
-    return transporter.sendMail({
+}
+
+// Creates a local TCP server that pipes connections through the proxy tunnel
+// nodemailer → localhost:port → proxy tunnel → smtp.gmail.com:587
+function createLocalSmtpProxy() {
+    return new Promise((resolve, reject) => {
+        const server = net.createServer(async (clientSocket) => {
+            try {
+                const proxySocket = await createProxyTunnel();
+                clientSocket.pipe(proxySocket);
+                proxySocket.pipe(clientSocket);
+                clientSocket.on('error', () => proxySocket.destroy());
+                proxySocket.on('error', () => clientSocket.destroy());
+                clientSocket.on('close', () => proxySocket.destroy());
+                proxySocket.on('close', () => clientSocket.destroy());
+            } catch (e) {
+                console.error('[SMTP-PROXY] Tunnel failed:', e.message);
+                clientSocket.destroy();
+            }
+        });
+        server.listen(0, '127.0.0.1', () => {
+            resolve({ server, port: server.address().port });
+        });
+        server.on('error', reject);
+    });
+}
+
+async function sendOtpEmail(toEmail, otp) {
+    const mailOpts = {
         from: 'Chet <rakibkumar151@gmail.com>',
         to: toEmail,
         subject: 'Your Chet Verification Code',
         text: `Your verification code is: ${otp}\n\nThis code expires in 10 minutes.`,
         html: `<h3>Welcome to Chet!</h3><p>Your verification code is: <b style="font-size:24px;color:#7c6cff">${otp}</b></p><p>This code expires in 10 minutes.</p>`
-    });
+    };
+
+    // Try via residential proxy tunnel (bypasses Render SMTP block)
+    try {
+        const { server, port } = await createLocalSmtpProxy();
+        const transport = nodemailer.createTransport({
+            host: '127.0.0.1',
+            port,
+            secure: false,
+            auth: { user: 'rakibkumar151@gmail.com', pass: 'ziasmvxfmtaxrxbx' },
+            tls: { rejectUnauthorized: false },
+            connectionTimeout: 20000,
+            greetingTimeout: 20000
+        });
+        const info = await transport.sendMail(mailOpts);
+        server.close();
+        return info;
+    } catch (proxyErr) {
+        console.error('[SMTP-PROXY] Proxy send failed, trying direct SMTP:', proxyErr.message);
+        // Fallback: direct Gmail SMTP (works locally)
+        const transport = nodemailer.createTransport({
+            host: SMTP_HOST, port: SMTP_PORT, secure: false,
+            auth: { user: 'rakibkumar151@gmail.com', pass: 'ziasmvxfmtaxrxbx' },
+            tls: { rejectUnauthorized: false }
+        });
+        return transport.sendMail(mailOpts);
+    }
 }
 
 
