@@ -9,16 +9,45 @@ const jwt     = require('jsonwebtoken');
 const { createClient } = require('@libsql/client');
 const nodemailer = require('nodemailer');
 
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
-    auth: {
-        user: 'rakibkumar151@gmail.com',
-        pass: 'ziasmvxfmtaxrxbx'
-    },
-    tls: { rejectUnauthorized: false }
-});
+// ─── EMAIL: Gmail SMTP (local) or Brevo HTTP API (Render/production) ──────────
+async function sendOtpEmail(toEmail, otp) {
+    // If BREVO_API_KEY is set, use Brevo HTTP API (works on Render - no SMTP block)
+    if (process.env.BREVO_API_KEY) {
+        const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'api-key': process.env.BREVO_API_KEY
+            },
+            body: JSON.stringify({
+                sender: { name: 'Chet', email: 'rakibkumar151@gmail.com' },
+                to: [{ email: toEmail }],
+                subject: 'Your Chet Verification Code',
+                textContent: `Your verification code is: ${otp}\n\nThis code expires in 10 minutes.`,
+                htmlContent: `<h3>Welcome to Chet!</h3><p>Your verification code is: <b style="font-size:24px;color:#7c6cff">${otp}</b></p><p>This code expires in 10 minutes.</p>`
+            })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(JSON.stringify(data));
+        return data;
+    }
+
+    // Fallback: Gmail SMTP (works locally)
+    const transporter = nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
+        auth: { user: 'rakibkumar151@gmail.com', pass: 'ziasmvxfmtaxrxbx' },
+        tls: { rejectUnauthorized: false }
+    });
+    return transporter.sendMail({
+        from: 'Chet <rakibkumar151@gmail.com>',
+        to: toEmail,
+        subject: 'Your Chet Verification Code',
+        text: `Your verification code is: ${otp}\n\nThis code expires in 10 minutes.`,
+        html: `<h3>Welcome to Chet!</h3><p>Your verification code is: <b style="font-size:24px;color:#7c6cff">${otp}</b></p><p>This code expires in 10 minutes.</p>`
+    });
+}
 
 
 const otpStore = new Map(); // email -> { otp, data, expiresAt }
@@ -30,6 +59,7 @@ setInterval(() => {
 }, 60000);
 
 const app = express();
+app.set('trust proxy', 1); // Render is behind a reverse proxy
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
 const allowedOrigin = process.env.FRONTEND_ORIGIN || '*';
@@ -63,6 +93,7 @@ const apiLimiter = rateLimit({
     max: 200,
     standardHeaders: true,
     legacyHeaders: false,
+    validate: { xForwardedForHeader: false }, // disable X-Forwarded-For validation warning
     message: { error: 'Too many requests, please try again later.' }
 });
 app.use('/api/', apiLimiter);
@@ -309,14 +340,9 @@ app.post('/api/auth/register', async (req, res) => {
         // Log OTP to server console as fallback (check Render logs if email fails)
         console.log(`[OTP] email=${email.toLowerCase().trim()} otp=${otp}`);
 
-        transporter.sendMail({
-            from: 'Chet <rakibkumar151@gmail.com>',
-            to: email.toLowerCase().trim(),
-            subject: 'Your Chet Verification Code',
-            text: `Your verification code is: ${otp}\n\nThis code expires in 10 minutes.`,
-            html: `<h3>Welcome to Chet!</h3><p>Your verification code is: <b style="font-size:24px; color:#7c6cff">${otp}</b></p><p>This code expires in 10 minutes.</p>`
-        }).then(info => console.log('[AUTH] Email sent OK:', info.response))
-          .catch(err => console.error('[AUTH] Email send FAILED:', err.message));
+        sendOtpEmail(email.toLowerCase().trim(), otp)
+            .then(info => console.log('[AUTH] Email sent OK:', JSON.stringify(info)))
+            .catch(err => console.error('[AUTH] Email send FAILED:', err.message));
 
         res.json({ success: true, requireOtp: true, message: 'OTP sent to your email.' });
     } catch (e) {
