@@ -72,13 +72,18 @@ function createLocalSmtpProxy() {
     });
 }
 
-async function sendOtpEmail(toEmail, otp) {
+async function sendOtpEmail(toEmail, otp, context = 'register') {
+    const isReset = context === 'reset';
+    const subject = isReset ? 'Reset Your Chet Password' : 'Your Chet Verification Code';
+    const title = isReset ? 'Password Reset Request' : 'Welcome to Chet!';
+    const bodyText = isReset ? 'You requested a password reset.' : 'We are excited to have you on board.';
+    
     const mailOpts = {
         from: 'Chet <rakibkumar151@gmail.com>',
         to: toEmail,
-        subject: 'Your Chet Verification Code',
-        text: `Your verification code is: ${otp}\n\nThis code expires in 10 minutes.`,
-        html: `<h3>Welcome to Chet!</h3><p>Your verification code is: <b style="font-size:24px;color:#7c6cff">${otp}</b></p><p>This code expires in 10 minutes.</p>`
+        subject: subject,
+        text: `${bodyText}\n\nYour verification code is: ${otp}\n\nThis code expires in 10 minutes.`,
+        html: `<h3>${title}</h3><p>${bodyText}</p><p>Your verification code is: <b style="font-size:24px;color:#7c6cff">${otp}</b></p><p>This code expires in 10 minutes.</p>`
     };
 
     // Try via residential proxy tunnel (bypasses Render SMTP block)
@@ -546,7 +551,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 
         console.log(`[OTP-RESET] email=${email.toLowerCase().trim()} otp=${otp}`);
         
-        sendOtpEmail(email.toLowerCase().trim(), otp)
+        sendOtpEmail(email.toLowerCase().trim(), otp, 'reset')
             .then(info => console.log('[AUTH] Reset email sent OK'))
             .catch(err => console.error('[AUTH] Reset email send FAILED:', err.message));
 
