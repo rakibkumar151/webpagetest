@@ -520,6 +520,96 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
+// ─── AUTH: FORGOT PASSWORD ───────────────────────────────────────────────────
+app.post('/api/auth/forgot-password', async (req, res) => {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    try {
+        const result = await db.execute({
+            sql: `SELECT id FROM users WHERE email = ? LIMIT 1`,
+            args: [email.toLowerCase().trim()]
+        });
+        if (result.rows.length === 0) {
+            // For security, do not reveal if email exists, just return success
+            return res.json({ success: true, message: 'If an account exists, an OTP will be sent.' });
+        }
+
+        // Generate OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        otpStore.set(email.toLowerCase().trim(), {
+            otp,
+            type: 'reset',
+            expiresAt: Date.now() + 10 * 60 * 1000
+        });
+
+        console.log(`[OTP-RESET] email=${email.toLowerCase().trim()} otp=${otp}`);
+        
+        sendOtpEmail(email.toLowerCase().trim(), otp)
+            .then(info => console.log('[AUTH] Reset email sent OK'))
+            .catch(err => console.error('[AUTH] Reset email send FAILED:', err.message));
+
+        res.json({ success: true, message: 'OTP sent to your email.' });
+    } catch (e) {
+        console.error('[AUTH] Forgot password error:', e.message);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.post('/api/auth/verify-reset-otp', async (req, res) => {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ error: 'Email and OTP required' });
+
+    const emailKey = email.toLowerCase().trim();
+    const entry = otpStore.get(emailKey);
+
+    if (!entry || entry.otp !== otp || entry.type !== 'reset') {
+        return res.status(401).json({ error: 'Invalid or expired OTP' });
+    }
+    if (Date.now() > entry.expiresAt) {
+        otpStore.delete(emailKey);
+        return res.status(401).json({ error: 'OTP expired' });
+    }
+
+    // OTP valid. Remove it, and generate a short-lived reset token
+    otpStore.delete(emailKey);
+    const resetToken = jwt.sign({ email: emailKey, type: 'reset' }, JWT_SECRET, { expiresIn: '15m' });
+    
+    res.json({ success: true, resetToken });
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    const { resetToken, newPassword } = req.body;
+    if (!resetToken || !newPassword) return res.status(400).json({ error: 'Token and new password required' });
+    if (newPassword.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+
+    try {
+        const decoded = jwt.verify(resetToken, JWT_SECRET);
+        if (decoded.type !== 'reset' || !decoded.email) {
+            return res.status(401).json({ error: 'Invalid token type' });
+        }
+
+        const email = decoded.email;
+        const passwordHash = await bcrypt.hash(newPassword, 10);
+
+        await db.execute({
+            sql: `UPDATE users SET password_hash = ? WHERE email = ?`,
+            args: [passwordHash, email]
+        });
+
+        console.log(`[AUTH] Password reset for email=${email}`);
+        res.json({ success: true, message: 'Password updated successfully' });
+    } catch (e) {
+        console.error('[AUTH] Reset password error:', e.message);
+        if (e.name === 'TokenExpiredError' || e.name === 'JsonWebTokenError') {
+            return res.status(401).json({ error: 'Token expired or invalid. Please request a new OTP.' });
+        }
+        res.status(500).json({ error: 'Failed to reset password' });
+    }
+});
+
 // ─── AUTH: ME ────────────────────────────────────────────────────────────────
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
     if (!db) return res.status(503).json({ error: 'Database not configured' });

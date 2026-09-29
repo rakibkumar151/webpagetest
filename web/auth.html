@@ -271,6 +271,9 @@
             <input type="password" id="loginPassword" placeholder="Enter your password" autocomplete="current-password" required>
         </div>
         <button type="submit" class="submit-btn" id="loginBtn">Sign In</button>
+        <div style="text-align:center; margin-top:16px;">
+            <a href="#" onclick="switchTab('forgot')" style="color:var(--accent1); font-size:13px; text-decoration:none; font-weight:600;">Forgot Password?</a>
+        </div>
     </form>
 
     <!-- REGISTER -->
@@ -317,6 +320,49 @@
         <button type="submit" class="submit-btn" id="otpBtn">Verify & Login</button>
         <div style="text-align:center; margin-top:12px;"><a href="#" onclick="switchTab('register')" style="color:var(--muted); font-size:12px; text-decoration:none;">&larr; Back to Register</a></div>
     </form>
+    </form>
+    
+    <!-- FORGOT PASSWORD FLOW -->
+    <form class="form" id="forgotForm" onsubmit="doForgot(event)">
+        <div style="text-align:center; margin-bottom: 20px;">
+            <h2 style="margin:0; font-size:24px; color:#fff;">Reset Password</h2>
+            <p style="margin:8px 0 0; font-size:14px; color:var(--muted);">Enter your email to receive an OTP.</p>
+        </div>
+        <div id="forgotMsg" class="msg"></div>
+        <div class="field">
+            <label>Email Address</label>
+            <input type="email" id="forgotEmail" placeholder="your@email.com" required autocomplete="off">
+        </div>
+        <button type="submit" class="submit-btn" id="forgotBtn">Send Reset Code</button>
+        <div style="text-align:center; margin-top:12px;"><a href="#" onclick="switchTab('login')" style="color:var(--muted); font-size:12px; text-decoration:none;">&larr; Back to Login</a></div>
+    </form>
+
+    <form class="form" id="resetOtpForm" onsubmit="doVerifyResetOtp(event)">
+        <div style="text-align:center; margin-bottom: 20px;">
+            <h2 style="margin:0; font-size:24px; color:#fff;">Verify OTP</h2>
+            <p style="margin:8px 0 0; font-size:14px; color:var(--muted);">Enter the 6-digit code sent to your email.</p>
+        </div>
+        <div id="resetOtpMsg" class="msg"></div>
+        <div class="field">
+            <label>Verification Code</label>
+            <input type="text" id="resetOtpCode" placeholder="Enter 6-digit code" required pattern="[0-9]{6}" maxlength="6" autocomplete="off" style="text-align:center; font-size:20px; letter-spacing:4px;">
+        </div>
+        <button type="submit" class="submit-btn" id="resetOtpBtn">Verify Code</button>
+        <div style="text-align:center; margin-top:12px;"><a href="#" onclick="switchTab('forgot')" style="color:var(--muted); font-size:12px; text-decoration:none;">&larr; Resend Code</a></div>
+    </form>
+
+    <form class="form" id="newPasswordForm" onsubmit="doResetPassword(event)">
+        <div style="text-align:center; margin-bottom: 20px;">
+            <h2 style="margin:0; font-size:24px; color:#fff;">New Password</h2>
+            <p style="margin:8px 0 0; font-size:14px; color:var(--muted);">Choose a new strong password.</p>
+        </div>
+        <div id="newPasswordMsg" class="msg"></div>
+        <div class="field">
+            <label>New Password</label>
+            <input type="password" id="newPass" placeholder="Minimum 6 characters" required minlength="6" autocomplete="new-password">
+        </div>
+        <button type="submit" class="submit-btn" id="newPasswordBtn">Update Password</button>
+    </form>
 </div>
 
 <script>
@@ -346,11 +392,31 @@ function switchTab(tab) {
     document.getElementById('loginForm').classList.toggle('active', tab === 'login');
     document.getElementById('registerForm').classList.toggle('active', tab === 'register');
     document.getElementById('otpForm').classList.toggle('active', tab === 'otp');
-    document.getElementById('loginTab').classList.toggle('active', tab === 'login');
-    document.getElementById('registerTab').classList.toggle('active', (tab === 'register' || tab === 'otp'));
+    document.getElementById('forgotForm').classList.toggle('active', tab === 'forgot');
+    document.getElementById('resetOtpForm').classList.toggle('active', tab === 'resetOtp');
+    document.getElementById('newPasswordForm').classList.toggle('active', tab === 'newPassword');
+    
+    // Manage top tabs visibility (hide during OTP/Forgot flows)
+    const showTabs = (tab === 'login' || tab === 'register');
+    document.querySelector('.tabs').style.display = showTabs ? 'flex' : 'none';
+    if(showTabs) {
+        document.getElementById('loginTab').classList.toggle('active', tab === 'login');
+        document.getElementById('registerTab').classList.toggle('active', tab === 'register');
+    }
+
+    if (tab === 'login') { document.getElementById('loginIdentifier').focus(); }
+    if (tab === 'register') { document.getElementById('regFirstName').focus(); }
+    if (tab === 'otp') { document.getElementById('otpCode').focus(); }
+    if (tab === 'forgot') { document.getElementById('forgotEmail').focus(); }
+    if (tab === 'resetOtp') { document.getElementById('resetOtpCode').focus(); }
+    if (tab === 'newPassword') { document.getElementById('newPass').focus(); }
+
     document.getElementById('loginMsg').className = 'msg';
     document.getElementById('registerMsg').className = 'msg';
     document.getElementById('otpMsg').className = 'msg';
+    document.getElementById('forgotMsg').className = 'msg';
+    document.getElementById('resetOtpMsg').className = 'msg';
+    document.getElementById('newPasswordMsg').className = 'msg';
 }
 
 function setMsg(id, text, type) {
@@ -461,6 +527,89 @@ async function doVerifyOtp(e) {
         setMsg('otpMsg', 'Server unreachable. Please try again.', 'error');
     } finally {
         setLoading('otpBtn', false);
+    }
+}
+
+// --- FORGOT PASSWORD ---
+let resetEmail = '';
+let resetToken = '';
+
+async function doForgot(e) {
+    e.preventDefault();
+    const email = document.getElementById('forgotEmail').value.trim();
+    if (!email) return;
+    
+    setLoading('forgotBtn', true);
+    setMsg('forgotMsg', '', '');
+    
+    try {
+        const r = await fetch(`${API}/api/auth/forgot-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        const data = await r.json();
+        if (!r.ok) { setMsg('forgotMsg', data.error || 'Request failed.', 'error'); return; }
+        
+        resetEmail = email;
+        setMsg('resetOtpMsg', data.message || 'Check your email for the OTP.', 'success');
+        switchTab('resetOtp');
+    } catch(err) {
+        setMsg('forgotMsg', 'Server unreachable.', 'error');
+    } finally {
+        setLoading('forgotBtn', false);
+    }
+}
+
+async function doVerifyResetOtp(e) {
+    e.preventDefault();
+    const otp = document.getElementById('resetOtpCode').value.trim();
+    if (!otp) return;
+    
+    setLoading('resetOtpBtn', true);
+    setMsg('resetOtpMsg', '', '');
+    
+    try {
+        const r = await fetch(`${API}/api/auth/verify-reset-otp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: resetEmail, otp })
+        });
+        const data = await r.json();
+        if (!r.ok) { setMsg('resetOtpMsg', data.error || 'Verification failed.', 'error'); return; }
+        
+        resetToken = data.resetToken;
+        switchTab('newPassword');
+    } catch(err) {
+        setMsg('resetOtpMsg', 'Server unreachable.', 'error');
+    } finally {
+        setLoading('resetOtpBtn', false);
+    }
+}
+
+async function doResetPassword(e) {
+    e.preventDefault();
+    const newPassword = document.getElementById('newPass').value;
+    if (!newPassword || newPassword.length < 6) return;
+    
+    setLoading('newPasswordBtn', true);
+    setMsg('newPasswordMsg', '', '');
+    
+    try {
+        const r = await fetch(`${API}/api/auth/reset-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ resetToken, newPassword })
+        });
+        const data = await r.json();
+        if (!r.ok) { setMsg('newPasswordMsg', data.error || 'Failed to update.', 'error'); return; }
+        
+        alert('Password updated successfully! Please log in.');
+        switchTab('login');
+    } catch(err) {
+        setMsg('newPasswordMsg', 'Server unreachable.', 'error');
+    } finally {
+        setLoading('newPasswordBtn', false);
     }
 }
 </script>
