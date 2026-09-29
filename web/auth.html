@@ -365,6 +365,21 @@
     </form>
 </div>
 
+<!-- CUSTOM SUCCESS MODAL -->
+<div id="successModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:9999; justify-content:center; align-items:center; backdrop-filter:blur(8px);">
+    <div style="background:#1e1e24; border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:30px; text-align:center; max-width:320px; width:100%; box-shadow:0 16px 40px rgba(0,0,0,0.5); animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1);">
+        <div style="width:64px; height:64px; background:rgba(124,108,255,0.1); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 20px;">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7c6cff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+        </div>
+        <h3 style="margin:0 0 10px; color:#fff; font-size:20px;">Success!</h3>
+        <p style="margin:0 0 24px; color:var(--muted); font-size:14px; line-height:1.5;">Password updated successfully.<br>Click OK to enter your account.</p>
+        <button id="modalOkBtn" style="background:linear-gradient(135deg, var(--accent1), var(--accent2)); color:#fff; border:none; padding:12px 24px; border-radius:12px; font-weight:700; cursor:pointer; width:100%; font-size:15px; transition:transform 0.2s;">OK</button>
+    </div>
+</div>
+
 <script>
 const API = (window.APP_CONFIG && window.APP_CONFIG.SIGNALING_URL) || window.location.origin;
 
@@ -604,8 +619,35 @@ async function doResetPassword(e) {
         const data = await r.json();
         if (!r.ok) { setMsg('newPasswordMsg', data.error || 'Failed to update.', 'error'); return; }
         
-        alert('Password updated successfully! Please log in.');
-        switchTab('login');
+        // Show success modal instead of alert
+        const modal = document.getElementById('successModal');
+        const okBtn = document.getElementById('modalOkBtn');
+        modal.style.display = 'flex';
+        
+        okBtn.onclick = async () => {
+            okBtn.innerHTML = 'Logging in...';
+            okBtn.disabled = true;
+            try {
+                // Auto login
+                const loginRes = await fetch(`${API}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ identifier: resetEmail, password: newPassword })
+                });
+                const loginData = await loginRes.json();
+                if (loginRes.ok) {
+                    saveAndRedirect(loginData);
+                } else {
+                    switchTab('login');
+                    modal.style.display = 'none';
+                    setMsg('loginMsg', 'Auto-login failed. Please sign in.', 'error');
+                }
+            } catch(e) {
+                switchTab('login');
+                modal.style.display = 'none';
+            }
+        };
+
     } catch(err) {
         setMsg('newPasswordMsg', 'Server unreachable.', 'error');
     } finally {
